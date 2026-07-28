@@ -1,9 +1,11 @@
-const CACHE_NAME = 'love-diary-v1'
+const CACHE_NAME = 'love-diary-v2'
+const BASE_URL = new URL(self.registration.scope).pathname
+const appUrl = path => `${BASE_URL}${path}`
 const APP_SHELL = [
-  '/',
-  '/manifest.webmanifest',
-  '/assets/img/icon-192.png',
-  '/assets/img/icon-512.png'
+  appUrl(''),
+  appUrl('manifest.webmanifest'),
+  appUrl('assets/img/icon-192.png'),
+  appUrl('assets/img/icon-512.png')
 ]
 
 self.addEventListener('install', event => {
@@ -30,10 +32,10 @@ self.addEventListener('fetch', event => {
       fetch(event.request)
         .then(response => {
           const copy = response.clone()
-          caches.open(CACHE_NAME).then(cache => cache.put('/', copy))
+          caches.open(CACHE_NAME).then(cache => cache.put(appUrl(''), copy))
           return response
         })
-        .catch(() => caches.match('/'))
+        .catch(() => caches.match(appUrl('')))
     )
     return
   }

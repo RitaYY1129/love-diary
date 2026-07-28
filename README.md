@@ -6,6 +6,8 @@
 
 项目推送到 `main` 分支后，会通过 GitHub Actions 自动部署到 GitHub Pages。
 
+在线地址：<https://ritayy1129.github.io/RitaYY1129/>
+
 ### Android
 
 1. 使用 Chrome 打开网站。

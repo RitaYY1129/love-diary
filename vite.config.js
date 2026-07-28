@@ -16,6 +16,7 @@ function copyPwaIcons() {
 }
 
 export default defineConfig({
+  base: '/RitaYY1129/',
   plugins: [vue(), copyPwaIcons()],
   resolve: {
     alias: {
