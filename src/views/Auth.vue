@@ -30,6 +30,8 @@
               <input 
                 v-model="form.phone" 
                 type="tel" 
+                inputmode="numeric"
+                autocomplete="tel"
                 class="form-input" 
                 placeholder="请输入手机号"
                 maxlength="11"
@@ -53,6 +55,8 @@
                   <input 
                     v-model="form.code" 
                     type="text" 
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
                     class="form-input" 
                     placeholder="请输入验证码"
                     maxlength="6"
@@ -117,11 +121,6 @@
           </button>
         </div>
 
-        <div class="mt-4 pt-4 border-t border-gray-100">
-          <button @click="useTestAccount" class="btn btn-secondary btn-block">
-            使用测试账号登录
-          </button>
-        </div>
       </div>
     </div>
 
@@ -150,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -158,7 +157,7 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 const mode = ref('login')
-const loginWithCode = ref(false)
+const loginWithCode = ref(true)
 const rememberMe = ref(false)
 const showPartnerBind = ref(false)
 const partnerCode = ref('')
@@ -180,16 +179,18 @@ const toast = ref({
   message: ''
 })
 
-const showToast = (message) => {
+const showToast = (message, duration = 2000) => {
   toast.value = { show: true, message }
   setTimeout(() => {
     toast.value.show = false
-  }, 2000)
+  }, duration)
 }
 
+const isValidPhone = (phone) => /^1[3-9]\d{9}$/.test(phone)
+
 const sendCode = async () => {
-  if (!form.value.phone) {
-    showToast('请输入手机号')
+  if (!isValidPhone(form.value.phone)) {
+    showToast('请输入正确的11位手机号')
     return
   }
   
@@ -203,6 +204,8 @@ const sendCode = async () => {
     codeButtonText.value = '获取验证码'
     return
   }
+
+  showToast(result.message, 6000)
   
   let count = 60
   codeTimer = setInterval(() => {
@@ -218,8 +221,8 @@ const sendCode = async () => {
 }
 
 const handleSubmit = async () => {
-  if (!form.value.phone) {
-    showToast('请输入手机号')
+  if (!isValidPhone(form.value.phone)) {
+    showToast('请输入正确的11位手机号')
     return
   }
   
@@ -287,26 +290,6 @@ const bindPartner = async () => {
   }
 }
 
-const useTestAccount = async () => {
-  const testUser = {
-    id: '1',
-    nickname: '甜蜜恋人',
-    phone: '13800138000',
-    partner: null,
-    createdAt: '2024-01-01T00:00:00Z'
-  }
-  
-  const testToken = 'test_token_love_diary_2024'
-  
-  authStore.setTestUser(testUser, testToken)
-  
-  showToast('测试账号登录成功')
-  
-  setTimeout(() => {
-    window.location.href = '/home'
-  }, 1500)
-}
-
 const bindVirtualPartner = () => {
   if (!authStore.isLoggedIn) {
     showToast('请先登录')
@@ -327,4 +310,8 @@ const bindVirtualPartner = () => {
     showPartnerBind.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  if (codeTimer) clearInterval(codeTimer)
+})
 </script>

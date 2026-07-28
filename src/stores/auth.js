@@ -10,12 +10,17 @@ export const useAuthStore = defineStore('auth', () => {
     return !!token.value && !!user.value
   })
 
+  const saveSession = (response) => {
+    token.value = response.token
+    user.value = response.user
+    localStorage.setItem('loveDiary_token', token.value)
+    localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
+  }
+
   const login = async (phone, password) => {
     try {
       const response = await AuthAPI.login(phone, password)
-      token.value = response.token
-      user.value = response.user
-      localStorage.setItem('loveDiary_token', token.value)
+      saveSession(response)
       return { ok: true, message: '登录成功' }
     } catch (error) {
       return { ok: false, message: error.message || '登录失败' }
@@ -25,10 +30,8 @@ export const useAuthStore = defineStore('auth', () => {
   const loginByCode = async (phone, code) => {
     try {
       const response = await AuthAPI.loginByCode(phone, code)
-      token.value = response.token
-      user.value = response.user
-      localStorage.setItem('loveDiary_token', token.value)
-      return { ok: true, message: '登录成功' }
+      saveSession(response)
+      return { ok: true, message: '验证码登录成功' }
     } catch (error) {
       return { ok: false, message: error.message || '登录失败' }
     }
@@ -37,9 +40,7 @@ export const useAuthStore = defineStore('auth', () => {
   const register = async (phone, code, nickname, password) => {
     try {
       const response = await AuthAPI.register(phone, code, nickname, password)
-      token.value = response.token
-      user.value = response.user
-      localStorage.setItem('loveDiary_token', token.value)
+      saveSession(response)
       return { ok: true, message: '注册成功' }
     } catch (error) {
       return { ok: false, message: error.message || '注册失败' }
@@ -48,8 +49,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   const sendCode = async (phone) => {
     try {
-      await AuthAPI.sendCode(phone)
-      return { ok: true, message: '验证码已发送' }
+      const response = await AuthAPI.sendCode(phone)
+      return {
+        ok: true,
+        message: response.devCode
+          ? `验证码：${response.devCode}，5分钟内有效`
+          : '验证码已发送'
+      }
     } catch (error) {
       return { ok: false, message: error.message || '发送失败' }
     }
@@ -59,6 +65,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     token.value = null
     localStorage.removeItem('loveDiary_token')
+    localStorage.removeItem('loveDiary_user')
   }
 
   const loadUser = async () => {
@@ -95,13 +102,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const setTestUser = (testUser, testToken) => {
-    user.value = testUser
-    token.value = testToken
-    localStorage.setItem('loveDiary_token', testToken)
-    localStorage.setItem('loveDiary_user', JSON.stringify(testUser))
-  }
-
   const bindVirtualPartner = () => {
     const virtualPartner = {
       id: '2',
@@ -129,7 +129,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     loadUser,
     bindPartner,
-    setTestUser,
     bindVirtualPartner
   }
 })

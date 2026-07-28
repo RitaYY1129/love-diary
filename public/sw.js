@@ -1,4 +1,4 @@
-const CACHE_NAME = 'love-diary-v2'
+const CACHE_NAME = 'love-diary-v3'
 const BASE_URL = new URL(self.registration.scope).pathname
 const appUrl = path => `${BASE_URL}${path}`
 const APP_SHELL = [
