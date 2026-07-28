@@ -1,0 +1,330 @@
+<template>
+  <div class="min-h-screen bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="text-6xl mb-4">💕</div>
+        <h1 class="text-2xl font-bold text-primary">恋爱日记</h1>
+        <p class="text-gray-500 mt-2">记录你们的甜蜜时光</p>
+      </div>
+
+      <div class="card p-6">
+        <div class="flex justify-center gap-4 mb-6">
+          <button 
+            @click="mode = 'login'" 
+            :class="['px-6 py-2 rounded-lg font-medium transition-all', mode === 'login' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600']"
+          >
+            登录
+          </button>
+          <button 
+            @click="mode = 'register'" 
+            :class="['px-6 py-2 rounded-lg font-medium transition-all', mode === 'register' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600']"
+          >
+            注册
+          </button>
+        </div>
+
+        <form @submit.prevent="handleSubmit">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">手机号</label>
+              <input 
+                v-model="form.phone" 
+                type="tel" 
+                class="form-input" 
+                placeholder="请输入手机号"
+                maxlength="11"
+              />
+            </div>
+
+            <div v-if="mode === 'login' && !loginWithCode">
+              <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+              <input 
+                v-model="form.password" 
+                type="password" 
+                class="form-input" 
+                placeholder="请输入密码"
+              />
+            </div>
+
+            <div v-else>
+              <div class="flex gap-2">
+                <div class="flex-1">
+                  <label class="block text-sm font-medium text-gray-700 mb-2">验证码</label>
+                  <input 
+                    v-model="form.code" 
+                    type="text" 
+                    class="form-input" 
+                    placeholder="请输入验证码"
+                    maxlength="6"
+                  />
+                </div>
+                <div class="flex items-end">
+                  <button 
+                    type="button" 
+                    @click="sendCode"
+                    :disabled="codeButtonDisabled"
+                    class="btn btn-outline h-[44px] px-4"
+                  >
+                    {{ codeButtonText }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="mode === 'register'">
+              <label class="block text-sm font-medium text-gray-700 mb-2">昵称</label>
+              <input 
+                v-model="form.nickname" 
+                type="text" 
+                class="form-input" 
+                placeholder="请输入昵称"
+              />
+            </div>
+
+            <div v-if="mode === 'register'">
+              <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
+              <input 
+                v-model="form.password" 
+                type="password" 
+                class="form-input" 
+                placeholder="请输入密码"
+              />
+            </div>
+
+            <div v-if="mode === 'login'" class="flex justify-between text-sm">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" v-model="rememberMe" />
+                <span class="text-gray-600">记住我</span>
+              </label>
+              <button type="button" @click="loginWithCode = !loginWithCode" class="text-primary">
+                {{ loginWithCode ? '使用密码登录' : '使用验证码登录' }}
+              </button>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            class="btn btn-primary btn-block mt-6"
+            :disabled="isSubmitting"
+          >
+            {{ isSubmitting ? '加载中...' : (mode === 'login' ? '登录' : '注册') }}
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <button @click="showPartnerBind = true" class="text-primary text-sm">
+            绑定另一半
+          </button>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-gray-100">
+          <button @click="useTestAccount" class="btn btn-secondary btn-block">
+            使用测试账号登录
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showPartnerBind" class="overlay show" @click.self="showPartnerBind = false">
+      <div class="overlay-box p-6">
+        <h3 class="text-lg font-bold mb-4">绑定另一半</h3>
+        <p class="text-gray-500 text-sm mb-4">输入对方的邀请码进行绑定</p>
+        <input 
+          v-model="partnerCode" 
+          type="text" 
+          class="form-input mb-4" 
+          placeholder="请输入邀请码"
+        />
+        <div class="flex gap-3 mb-3">
+          <button @click="showPartnerBind = false" class="btn btn-secondary flex-1">取消</button>
+          <button @click="bindPartner" class="btn btn-primary flex-1">绑定</button>
+        </div>
+        <button @click="bindVirtualPartner" class="btn btn-outline btn-block">
+          👫 绑定虚拟情人 (测试)
+        </button>
+      </div>
+    </div>
+
+    <div :class="['toast', toast.show ? 'show' : '']">{{ toast.message }}</div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const router = useRouter()
+
+const mode = ref('login')
+const loginWithCode = ref(false)
+const rememberMe = ref(false)
+const showPartnerBind = ref(false)
+const partnerCode = ref('')
+const isSubmitting = ref(false)
+
+const form = ref({
+  phone: '',
+  password: '',
+  code: '',
+  nickname: ''
+})
+
+const codeButtonText = ref('获取验证码')
+const codeButtonDisabled = ref(false)
+let codeTimer = null
+
+const toast = ref({
+  show: false,
+  message: ''
+})
+
+const showToast = (message) => {
+  toast.value = { show: true, message }
+  setTimeout(() => {
+    toast.value.show = false
+  }, 2000)
+}
+
+const sendCode = async () => {
+  if (!form.value.phone) {
+    showToast('请输入手机号')
+    return
+  }
+  
+  codeButtonDisabled.value = true
+  codeButtonText.value = '60s'
+  
+  const result = await authStore.sendCode(form.value.phone)
+  if (!result.ok) {
+    showToast(result.message)
+    codeButtonDisabled.value = false
+    codeButtonText.value = '获取验证码'
+    return
+  }
+  
+  let count = 60
+  codeTimer = setInterval(() => {
+    count--
+    if (count <= 0) {
+      clearInterval(codeTimer)
+      codeButtonDisabled.value = false
+      codeButtonText.value = '获取验证码'
+    } else {
+      codeButtonText.value = `${count}s`
+    }
+  }, 1000)
+}
+
+const handleSubmit = async () => {
+  if (!form.value.phone) {
+    showToast('请输入手机号')
+    return
+  }
+  
+  if (mode.value === 'register') {
+    if (!form.value.nickname) {
+      showToast('请输入昵称')
+      return
+    }
+    if (!form.value.password) {
+      showToast('请输入密码')
+      return
+    }
+    if (!form.value.code) {
+      showToast('请输入验证码')
+      return
+    }
+  } else {
+    if (loginWithCode.value && !form.value.code) {
+      showToast('请输入验证码')
+      return
+    }
+    if (!loginWithCode.value && !form.value.password) {
+      showToast('请输入密码')
+      return
+    }
+  }
+  
+  isSubmitting.value = true
+  
+  let result
+  if (mode.value === 'login') {
+    if (loginWithCode.value) {
+      result = await authStore.loginByCode(form.value.phone, form.value.code)
+    } else {
+      result = await authStore.login(form.value.phone, form.value.password)
+    }
+  } else {
+    result = await authStore.register(form.value.phone, form.value.code, form.value.nickname, form.value.password)
+  }
+  
+  isSubmitting.value = false
+  
+  if (result.ok) {
+    showToast(result.message)
+    setTimeout(() => {
+      router.push('/home')
+    }, 1500)
+  } else {
+    showToast(result.message)
+  }
+}
+
+const bindPartner = async () => {
+  if (!partnerCode.value) {
+    showToast('请输入邀请码')
+    return
+  }
+  
+  const result = await authStore.bindPartner(partnerCode.value)
+  if (result.ok) {
+    showToast(result.message)
+    showPartnerBind.value = false
+  } else {
+    showToast(result.message)
+  }
+}
+
+const useTestAccount = async () => {
+  const testUser = {
+    id: '1',
+    nickname: '甜蜜恋人',
+    phone: '13800138000',
+    partner: null,
+    createdAt: '2024-01-01T00:00:00Z'
+  }
+  
+  const testToken = 'test_token_love_diary_2024'
+  
+  authStore.setTestUser(testUser, testToken)
+  
+  showToast('测试账号登录成功')
+  
+  setTimeout(() => {
+    window.location.href = '/home'
+  }, 1500)
+}
+
+const bindVirtualPartner = () => {
+  if (!authStore.isLoggedIn) {
+    showToast('请先登录')
+    return
+  }
+  
+  const virtualPartner = {
+    id: '2',
+    nickname: '虚拟情人',
+    phone: '13800138001',
+    createdAt: '2024-01-02T00:00:00Z'
+  }
+  
+  if (authStore.user) {
+    authStore.user.partner = virtualPartner
+    localStorage.setItem('loveDiary_partner', JSON.stringify(virtualPartner))
+    showToast('虚拟情人绑定成功')
+    showPartnerBind.value = false
+  }
+}
+</script>
