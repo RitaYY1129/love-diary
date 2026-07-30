@@ -8,7 +8,7 @@ Android 内测构建说明见 [ANDROID_SETUP.md](./ANDROID_SETUP.md)。
 
 项目推送到 `main` 分支后，会通过 GitHub Actions 自动部署到 GitHub Pages。
 
-在线地址：<https://ritayy1129.github.io/RitaYY1129/>
+在线地址：<https://ritayy1129.github.io/love-diary/>
 
 ### Android
 
