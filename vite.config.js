@@ -16,7 +16,7 @@ function copyPwaIcons() {
 }
 
 export default defineConfig({
-  base: '/love-diary/',
+  base: '/Love-diary/',
   plugins: [vue(), copyPwaIcons()],
   resolve: {
     alias: {
