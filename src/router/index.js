@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
@@ -39,9 +39,7 @@ const routes = [
   },
   {
     path: '/wishes',
-    name: 'Wishes',
-    component: () => import('@/views/Wishes.vue'),
-    meta: { requiresAuth: true }
+    redirect: '/bucketlist'
   },
   {
     path: '/anniversary',
@@ -65,6 +63,24 @@ const routes = [
     path: '/settings',
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: () => import('@/views/Profile.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/guardian',
+    name: 'Guardian',
+    component: () => import('@/views/Guardian.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/themes',
+    name: 'Themes',
+    component: () => import('@/views/Themes.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -118,7 +134,9 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: import.meta.env.VITE_NATIVE_APP === 'true'
+    ? createWebHashHistory()
+    : createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 

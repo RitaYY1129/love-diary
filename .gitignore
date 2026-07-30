@@ -1,10 +1,16 @@
 node_modules/
+.npm-cache/
+.gradle-home/
 build/
 dist/
 .vscode/
+.edge-test-profile/
 *.log
 .DS_Store
 *.zip
 .env
 .env.local
 .env.*.local
+android/local.properties
+android/.gradle/
+android/app/build/

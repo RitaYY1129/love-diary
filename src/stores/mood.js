@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { MockAPI } from '@/api/mock'
+import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
 export const useMoodStore = defineStore('mood', () => {
   const moods = ref([])
@@ -9,6 +10,11 @@ export const useMoodStore = defineStore('mood', () => {
     try {
       const response = await MockAPI.mood.list()
       moods.value = response.data
+      const shared = await hydrateSharedState('mood', moods.value)
+      if (shared.enabled && Array.isArray(shared.payload)) {
+        moods.value = shared.payload
+        localStorage.setItem('loveDiary_moods', JSON.stringify(moods.value))
+      }
       return moods.value
     } catch (error) {
       console.error('Failed to load moods:', error)
@@ -26,6 +32,7 @@ export const useMoodStore = defineStore('mood', () => {
       } else {
         moods.value.push(response)
       }
+      pushSharedState('mood', moods.value)
       return response
     } catch (error) {
       console.error('Failed to create mood:', error)
@@ -40,6 +47,7 @@ export const useMoodStore = defineStore('mood', () => {
       if (index !== -1) {
         moods.value[index] = response
       }
+      pushSharedState('mood', moods.value)
       return response
     } catch (error) {
       console.error('Failed to update mood:', error)
@@ -51,6 +59,7 @@ export const useMoodStore = defineStore('mood', () => {
     try {
       await MockAPI.mood.delete(id)
       moods.value = moods.value.filter(m => m.id !== id)
+      pushSharedState('mood', moods.value)
       return true
     } catch (error) {
       console.error('Failed to delete mood:', error)

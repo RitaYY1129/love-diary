@@ -44,6 +44,15 @@
         </button>
       </div>
 
+      <div class="account-card">
+        <div class="history-header"><h2 class="history-title">💳 存钱类型</h2><button class="goal-add-btn" @click="showAccountModal = true">+ 新建</button></div>
+        <div class="account-list">
+          <button v-for="account in accounts" :key="account.id" :class="{ active: selectedAccountId === account.id }" @click="selectedAccountId = account.id">
+            <span>{{ account.icon }}</span><strong>{{ account.name }}</strong><small>¥{{ formatMoney(account.balance) }}</small>
+          </button>
+        </div>
+      </div>
+
       <div class="goal-card">
         <div class="goal-header">
           <h2 class="goal-title">💰 存钱目标</h2>
@@ -75,22 +84,28 @@
         <div class="history-header">
           <h2 class="history-title">📋 交易记录</h2>
         </div>
-        <div v-if="transactions.length > 0" class="transaction-list">
+        <div class="history-tools">
+          <input v-model="searchKeyword" placeholder="搜索备注、类型或日期">
+          <select v-model="transactionFilter"><option value="all">全部</option><option value="add">存入</option><option value="withdraw">支出</option></select>
+        </div>
+        <div v-if="filteredTransactions.length > 0" class="transaction-list">
           <div 
-            v-for="(transaction, index) in transactions" 
-            :key="index"
+            v-for="transaction in filteredTransactions"
+            :key="transaction.id"
             class="transaction-item"
+            @click="selectedTransaction = transaction"
           >
             <div class="transaction-icon" :class="transaction.type">
               <span>{{ transaction.type === 'add' ? '💵' : '💳' }}</span>
             </div>
             <div class="transaction-info">
               <div class="transaction-desc">{{ transaction.description }}</div>
-              <div class="transaction-date">{{ transaction.date }}</div>
+              <div class="transaction-date">{{ accountName(transaction.accountId) }} · {{ transaction.category || '其他' }} · {{ transaction.date }}</div>
             </div>
             <div class="transaction-amount" :class="transaction.type">
               {{ transaction.type === 'add' ? '+' : '-' }}¥{{ formatMoney(transaction.amount) }}
             </div>
+            <button class="transaction-delete" @click.stop="deleteTransaction(transaction)">删除</button>
           </div>
         </div>
         <div v-else class="history-empty">
@@ -112,6 +127,8 @@
             placeholder="输入金额"
           />
         </div>
+        <select v-model="addAccountId" class="goal-name-input"><option v-for="account in accounts" :key="account.id" :value="account.id">存入到：{{ account.name }}</option></select>
+        <select v-model="addCategory" class="goal-name-input"><option>日常储蓄</option><option>旅行基金</option><option>礼物基金</option><option>应急备用</option><option>其他</option></select>
         <div class="quick-amounts">
           <button 
             v-for="amount in quickAmounts" 
@@ -144,12 +161,34 @@
             :max="totalAmount"
           />
         </div>
+        <select v-model="withdrawAccountId" class="goal-name-input"><option v-for="account in accounts" :key="account.id" :value="account.id">从 {{ account.name }} 提取</option></select>
         <textarea 
           v-model="withdrawNote" 
           class="note-input" 
           placeholder="提取原因（可选）"
         ></textarea>
         <button @click="submitWithdraw" class="submit-btn withdraw-submit">确认提取</button>
+      </div>
+    </div>
+
+    <div v-if="showAccountModal" class="modal-overlay" @click.self="showAccountModal = false">
+      <div class="modal-content">
+        <h3 class="modal-title">新建存钱类型</h3>
+        <input v-model="accountNameInput" class="goal-name-input" maxlength="16" placeholder="例如：旅行基金">
+        <select v-model="accountIcon" class="goal-name-input"><option>💰</option><option>✈️</option><option>🏠</option><option>🎁</option><option>💍</option><option>🌱</option></select>
+        <button class="submit-btn add-submit" @click="createAccount">创建</button>
+      </div>
+    </div>
+
+    <div v-if="selectedTransaction" class="modal-overlay" @click.self="selectedTransaction = null">
+      <div class="modal-content">
+        <h3 class="modal-title">账目详情</h3>
+        <p class="detail-row"><span>金额</span><strong>{{ selectedTransaction.type === 'add' ? '+' : '-' }}¥{{ formatMoney(selectedTransaction.amount) }}</strong></p>
+        <p class="detail-row"><span>存钱类型</span><strong>{{ accountName(selectedTransaction.accountId) }}</strong></p>
+        <p class="detail-row"><span>分类</span><strong>{{ selectedTransaction.category || '其他' }}</strong></p>
+        <p class="detail-row"><span>备注</span><strong>{{ selectedTransaction.description }}</strong></p>
+        <p class="detail-row"><span>时间</span><strong>{{ selectedTransaction.date }}</strong></p>
+        <button class="submit-btn goal-submit" @click="selectedTransaction = null">关闭</button>
       </div>
     </div>
 
@@ -180,38 +219,49 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
 const router = useRouter()
 
-const totalAmount = ref(13140)
-const myContribution = ref(7000)
-const partnerContribution = ref(6140)
+const accounts = ref([{ id: 'joint', name: '共同基金', icon: '💰', balance: 0 }])
+const selectedAccountId = ref('joint')
+const totalAmount = computed(() => accounts.value.reduce((sum, account) => sum + Number(account.balance || 0), 0))
+const myContribution = ref(0)
+const partnerContribution = ref(0)
 
-const currentGoal = ref({
-  name: '蜜月旅行',
-  target: 50000
-})
+const currentGoal = ref(null)
 
-const transactions = ref([
-  { id: 1, type: 'add', amount: 1000, description: '工资收入', date: '2024-01-20 10:30' },
-  { id: 2, type: 'add', amount: 520, description: '红包', date: '2024-01-19 14:20' },
-  { id: 3, type: 'withdraw', amount: 200, description: '买奶茶', date: '2024-01-18 18:00' },
-  { id: 4, type: 'add', amount: 2000, description: '年终奖', date: '2024-01-15 09:00' },
-  { id: 5, type: 'add', amount: 1314, description: '情人节礼物', date: '2024-01-14 20:00' },
-])
+const transactions = ref([])
 
 const showAddModal = ref(false)
 const showWithdrawModal = ref(false)
 const showGoalModal = ref(false)
+const showAccountModal = ref(false)
+const accountNameInput = ref('')
+const accountIcon = ref('💰')
+const searchKeyword = ref('')
+const transactionFilter = ref('all')
+const selectedTransaction = ref(null)
 
 const addAmount = ref('')
 const addNote = ref('')
+const addAccountId = ref('joint')
+const addCategory = ref('日常储蓄')
 const withdrawAmount = ref('')
 const withdrawNote = ref('')
+const withdrawAccountId = ref('joint')
 const goalName = ref('')
 const goalTarget = ref('')
 
 const quickAmounts = [520, 1314, 2000, 5000]
+const filteredTransactions = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  return transactions.value.filter(item => {
+    const matchesType = transactionFilter.value === 'all' || item.type === transactionFilter.value
+    const haystack = `${item.description} ${item.category || ''} ${item.date} ${accountName(item.accountId)}`.toLowerCase()
+    return matchesType && (!keyword || haystack.includes(keyword))
+  })
+})
 
 const progressPercent = computed(() => {
   if (!currentGoal.value) return 0
@@ -219,18 +269,21 @@ const progressPercent = computed(() => {
 })
 
 const formatMoney = (amount) => {
-  return amount.toLocaleString('zh-CN')
+  return Number(amount || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+const accountName = id => accounts.value.find(account => account.id === (id || 'joint'))?.name || '共同基金'
 
 const goBack = () => {
   router.push('/home')
 }
 
 const openAddModal = () => {
+  addAccountId.value = selectedAccountId.value
   showAddModal.value = true
 }
 
 const openWithdrawModal = () => {
+  withdrawAccountId.value = selectedAccountId.value
   showWithdrawModal.value = true
 }
 
@@ -250,25 +303,33 @@ const closeModal = () => {
   goalTarget.value = ''
 }
 
-const persistFund = () => {
-  localStorage.setItem('loveDiary_fund', JSON.stringify({
+const fundPayload = () => ({
     totalAmount: totalAmount.value,
     myContribution: myContribution.value,
     partnerContribution: partnerContribution.value,
     currentGoal: currentGoal.value,
-    transactions: transactions.value
-  }))
+    transactions: transactions.value,
+    accounts: accounts.value
+})
+const persistFund = () => {
+  const payload = fundPayload()
+  localStorage.setItem('loveDiary_fund', JSON.stringify(payload))
+  pushSharedState('fund', payload)
 }
 
 const submitAdd = () => {
   if (!addAmount.value || addAmount.value <= 0) return
   const amount = Number(addAmount.value)
-  totalAmount.value += amount
+  const account = accounts.value.find(item => item.id === addAccountId.value)
+  if (!account) return
+  account.balance += amount
   myContribution.value += amount
   transactions.value.unshift({
     id: Date.now(),
     type: 'add',
     amount: amount,
+    accountId: account.id,
+    category: addCategory.value,
     description: addNote.value || '存入资金',
     date: new Date().toLocaleString('zh-CN')
   })
@@ -277,13 +338,16 @@ const submitAdd = () => {
 }
 
 const submitWithdraw = () => {
-  if (!withdrawAmount.value || withdrawAmount.value <= 0 || withdrawAmount.value > totalAmount.value) return
+  const account = accounts.value.find(item => item.id === withdrawAccountId.value)
+  if (!account || !withdrawAmount.value || withdrawAmount.value <= 0 || withdrawAmount.value > account.balance) return
   const amount = Number(withdrawAmount.value)
-  totalAmount.value -= amount
+  account.balance -= amount
   transactions.value.unshift({
     id: Date.now(),
     type: 'withdraw',
     amount: amount,
+    accountId: account.id,
+    category: '支出',
     description: withdrawNote.value || '提取资金',
     date: new Date().toLocaleString('zh-CN')
   })
@@ -301,17 +365,46 @@ const submitGoal = () => {
   closeModal()
 }
 
-onMounted(() => {
-  const stored = localStorage.getItem('loveDiary_fund')
-  if (!stored) return
-  try {
-    const data = JSON.parse(stored)
-    totalAmount.value = Number(data.totalAmount) || 0
-    myContribution.value = Number(data.myContribution) || 0
-    partnerContribution.value = Number(data.partnerContribution) || 0
-    currentGoal.value = data.currentGoal || null
-    transactions.value = Array.isArray(data.transactions) ? data.transactions : []
-  } catch {}
+const createAccount = () => {
+  const name = accountNameInput.value.trim()
+  if (!name) return
+  const account = { id: `account_${Date.now()}`, name, icon: accountIcon.value, balance: 0 }
+  accounts.value.push(account); selectedAccountId.value = account.id
+  addAccountId.value = account.id; withdrawAccountId.value = account.id
+  accountNameInput.value = ''; showAccountModal.value = false; persistFund()
+}
+
+const deleteTransaction = transaction => {
+  if (!confirm('删除这笔账目并同步修正余额吗？')) return
+  const account = accounts.value.find(item => item.id === (transaction.accountId || 'joint'))
+  if (account) account.balance += transaction.type === 'add' ? -Number(transaction.amount) : Number(transaction.amount)
+  if (transaction.type === 'add') myContribution.value = Math.max(0, myContribution.value - Number(transaction.amount))
+  transactions.value = transactions.value.filter(item => item.id !== transaction.id)
+  selectedTransaction.value = null; persistFund()
+}
+
+const applyFundData = data => {
+  accounts.value = Array.isArray(data?.accounts) && data.accounts.length
+    ? data.accounts.map(account => ({ ...account, balance: Number(account.balance) || 0 }))
+    : [{ id: 'joint', name: '共同基金', icon: '💰', balance: Number(data?.totalAmount) || 0 }]
+  myContribution.value = Number(data?.myContribution) || 0
+  partnerContribution.value = Number(data?.partnerContribution) || 0
+  currentGoal.value = data?.currentGoal || null
+  transactions.value = Array.isArray(data?.transactions) ? data.transactions.map(item => ({ ...item, accountId: item.accountId || 'joint' })) : []
+  selectedAccountId.value = accounts.value[0].id
+  addAccountId.value = accounts.value[0].id
+  withdrawAccountId.value = accounts.value[0].id
+}
+
+onMounted(async () => {
+  let localData = fundPayload()
+  try { localData = JSON.parse(localStorage.getItem('loveDiary_fund') || JSON.stringify(localData)) } catch {}
+  applyFundData(localData)
+  const shared = await hydrateSharedState('fund', fundPayload())
+  if (shared.enabled && shared.payload && typeof shared.payload === 'object') {
+    applyFundData(shared.payload)
+    localStorage.setItem('loveDiary_fund', JSON.stringify(fundPayload()))
+  }
 })
 </script>
 
@@ -752,4 +845,7 @@ onMounted(() => {
   background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
   color: white;
 }
+</style>
+<style scoped>
+.account-card{background:#fff;border-radius:18px;padding:18px;margin-bottom:18px}.account-list{display:flex;gap:9px;overflow:auto;margin-top:12px}.account-list button{flex:0 0 125px;padding:13px;border:1px solid #eee;border-radius:15px;background:#fafafa;text-align:left;color:#555}.account-list button.active{background:linear-gradient(135deg,#fff0f2,#fff8ec);border-color:#edb7c1}.account-list span,.account-list strong,.account-list small{display:block}.account-list span{font-size:20px}.account-list strong{font-size:12px;margin:6px 0}.account-list small{font-size:11px;color:#cc5e73}.history-tools{display:flex;gap:8px;margin:12px 0}.history-tools input,.history-tools select{min-width:0;border:1px solid #eee;border-radius:11px;background:#fafafa;padding:9px;font-size:11px}.history-tools input{flex:1}.transaction-delete{border:0;background:#fff0f2;color:#c15a6e;border-radius:8px;padding:6px;font-size:9px}.detail-row{display:flex;justify-content:space-between;gap:20px;padding:11px 0;border-bottom:1px solid #f3eeee;font-size:11px}.detail-row span{color:#999}.detail-row strong{text-align:right}
 </style>

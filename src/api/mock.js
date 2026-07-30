@@ -95,15 +95,11 @@ const mockPlans = [
 ]
 
 export const initMockData = () => {
-  const existingUser = localStorage.getItem('loveDiary_user')
-  const existingToken = localStorage.getItem('loveDiary_token')
-  
-  if (!existingToken) {
-    localStorage.setItem('loveDiary_token', 'mock-token-12345')
-  }
-  
-  if (!existingUser) {
-    localStorage.setItem('loveDiary_user', JSON.stringify(mockUserData))
+  // 旧版本会自动写入模拟登录，导致页面看似已登录但所有真实接口都返回 401。
+  // 只清理旧模拟会话，不影响用户已经通过手机号或微信取得的真实会话。
+  if (localStorage.getItem('loveDiary_token') === 'mock-token-12345') {
+    localStorage.removeItem('loveDiary_token')
+    localStorage.removeItem('loveDiary_user')
   }
   
   if (!localStorage.getItem('loveDiary_diaries')) {

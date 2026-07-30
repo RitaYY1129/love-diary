@@ -122,6 +122,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { MockAPI } from '@/api/mock'
+import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
 const router = useRouter()
 const route = useRoute()
@@ -131,7 +132,7 @@ const currentPath = computed(() => route.path)
 const tabs = [
   { path: '/home', icon: '🏠', label: '首页' },
   { path: '/anniversary', icon: '♡', label: '纪念日' },
-  { path: '/photo', icon: '📸', label: '足迹' },
+  { path: '/chat', icon: '💬', label: '聊天' },
   { path: '/location', icon: '📍', label: '位置' },
   { path: '/me', icon: '👤', label: '我的' }
 ]
@@ -227,7 +228,8 @@ const savePlan = async () => {
     else await MockAPI.plan.create(data)
     
     closeCreateModal()
-    await loadPlans()
+    await loadPlans(false)
+    pushSharedState('plans', plans.value)
   } catch (error) {
     console.error('Save plan failed:', error)
   }
@@ -236,7 +238,8 @@ const savePlan = async () => {
 const toggleComplete = async (plan) => {
   try {
     await MockAPI.plan.update(plan.id, { completed: !plan.completed })
-    await loadPlans()
+    await loadPlans(false)
+    pushSharedState('plans', plans.value)
   } catch (error) {
     console.error('Toggle complete failed:', error)
   }
@@ -246,14 +249,15 @@ const deletePlan = async (id) => {
   if (confirm('确定要删除这个计划吗？')) {
     try {
       await MockAPI.plan.delete(id)
-      await loadPlans()
+      await loadPlans(false)
+      pushSharedState('plans', plans.value)
     } catch (error) {
       console.error('Delete plan failed:', error)
     }
   }
 }
 
-const loadPlans = async () => {
+const loadPlans = async (sync = true) => {
   try {
     const response = await MockAPI.plan.list()
     plans.value = response.data.map(item => ({
@@ -261,6 +265,13 @@ const loadPlans = async () => {
       date: item.date || item.target_date || '',
       completedAt: item.completedAt || item.completed_at || ''
     }))
+    if (sync) {
+      const shared = await hydrateSharedState('plans', plans.value)
+      if (shared.enabled && Array.isArray(shared.payload)) {
+        plans.value = shared.payload
+        localStorage.setItem('loveDiary_plans', JSON.stringify(plans.value))
+      }
+    }
   } catch (error) {
     console.error('Load plans failed:', error)
   }

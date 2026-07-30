@@ -1,54 +1,8 @@
 import axios from 'axios'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api'
-const SMS_CODES_KEY = 'loveDiary_sms_codes'
-const SMS_USERS_KEY = 'loveDiary_sms_users'
-
-const readLocalObject = (key) => {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) || '{}')
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
-  } catch {
-    return {}
-  }
-}
-
-const verifyLocalCode = (phone, code) => {
-  const codes = readLocalObject(SMS_CODES_KEY)
-  const record = codes[phone]
-
-  if (!record || record.expiresAt < Date.now()) {
-    if (record) {
-      delete codes[phone]
-      localStorage.setItem(SMS_CODES_KEY, JSON.stringify(codes))
-    }
-    throw new Error('验证码已过期，请重新获取')
-  }
-
-  if (String(record.code) !== String(code).trim()) {
-    throw new Error('验证码错误，请重新输入')
-  }
-
-  delete codes[phone]
-  localStorage.setItem(SMS_CODES_KEY, JSON.stringify(codes))
-}
-
-const getOrCreateSmsUser = (phone, profile = {}) => {
-  const users = readLocalObject(SMS_USERS_KEY)
-  const existing = users[phone]
-  const user = {
-    id: existing?.id || `sms_${phone}`,
-    phone,
-    nickname: profile.nickname || existing?.nickname || `恋爱用户${phone.slice(-4)}`,
-    avatar: existing?.avatar || '',
-    partner: existing?.partner || null,
-    loveStartDate: existing?.loveStartDate || new Date().toISOString().slice(0, 10),
-    createdAt: existing?.createdAt || new Date().toISOString()
-  }
-  users[phone] = user
-  localStorage.setItem(SMS_USERS_KEY, JSON.stringify(users))
-  return user
-}
+// 开发环境使用同源代理，避免手机访问局域网地址时把 localhost 解析成手机自身。
+// Android/生产构建仍由 VITE_API_BASE 指向正式 HTTPS 后端。
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const axiosInstance = axios.create({
   baseURL: API_BASE,
@@ -73,9 +27,10 @@ axiosInstance.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('loveDiary_token')
-      window.location.href = '/'
+      localStorage.removeItem('loveDiary_user')
+      window.location.href = import.meta.env.BASE_URL || '/'
     }
-    return Promise.reject(error.response?.data?.message || error.message)
+    return Promise.reject(new Error(error.response?.data?.message || error.message))
   }
 )
 
@@ -84,38 +39,28 @@ export const AuthAPI = {
     return await axiosInstance.post('/auth/login', { phone, password })
   },
 
-  sendCode: async (phone) => {
+  sendCode: async (phone, purpose = 'login') => {
     if (!/^1[3-9]\d{9}$/.test(phone)) {
       throw new Error('请输入正确的11位手机号')
     }
-
-    const codes = readLocalObject(SMS_CODES_KEY)
-    const code = String(Math.floor(100000 + Math.random() * 900000))
-    codes[phone] = {
-      code,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 5 * 60 * 1000
-    }
-    localStorage.setItem(SMS_CODES_KEY, JSON.stringify(codes))
-    return { success: true, devCode: code, expiresIn: 300 }
+    return await axiosInstance.post('/auth/sms/send', { phone, purpose })
   },
 
   loginByCode: async (phone, code) => {
-    verifyLocalCode(phone, code)
-    const user = getOrCreateSmsUser(phone)
-    return {
-      token: `sms_token_${phone}_${Date.now()}`,
-      user
-    }
+    return await axiosInstance.post('/auth/sms/login', { phone, code })
   },
 
   register: async (phone, code, nickname, password) => {
-    verifyLocalCode(phone, code)
-    const user = getOrCreateSmsUser(phone, { nickname })
-    return {
-      token: `sms_token_${phone}_${Date.now()}`,
-      user
-    }
+    return await axiosInstance.post('/auth/sms/register', {
+      phone,
+      code,
+      nickname,
+      password
+    })
+  },
+
+  loginByWechat: async (code) => {
+    return await axiosInstance.post('/auth/wechat', { code })
   },
 
   getProfile: async () => {
@@ -281,4 +226,27 @@ export const LocationAPI = {
   getHistory: async () => {
     return await axiosInstance.get('/locations/history')
   }
+}
+
+export const CalmModeAPI = {
+  get: async () => await axiosInstance.get('/calm-mode'),
+  request: async (durationHours) => await axiosInstance.post('/calm-mode/request', { durationHours }),
+  accept: async id => await axiosInstance.post(`/calm-mode/${id}/accept`),
+  exit: async id => await axiosInstance.post(`/calm-mode/${id}/exit`)
+}
+
+export const ChatAPI = {
+  list: async (afterId = 0) => await axiosInstance.get('/chat', { params: { afterId } }),
+  send: async (type, content, metadata = {}) => await axiosInstance.post('/chat', { type, content, metadata })
+}
+
+export const CallAPI = {
+  list: async (limit = 50) => await axiosInstance.get('/calls', { params: { limit } })
+}
+
+export const SharingAPI = {
+  getPreferences: async () => await axiosInstance.get('/sharing/preferences'),
+  updatePreferences: async preferences => await axiosInstance.put('/sharing/preferences', preferences),
+  getState: async module => await axiosInstance.get(`/sharing/state/${module}`),
+  putState: async (module, payload) => await axiosInstance.put(`/sharing/state/${module}`, { payload })
 }

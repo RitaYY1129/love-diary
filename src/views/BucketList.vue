@@ -103,6 +103,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
 const router = useRouter()
 const route = useRoute()
@@ -112,7 +113,7 @@ const currentPath = computed(() => route.path)
 const tabs = [
   { path: '/home', icon: '🏠', label: '首页' },
   { path: '/anniversary', icon: '♡', label: '纪念日' },
-  { path: '/photo', icon: '📸', label: '足迹' },
+  { path: '/chat', icon: '💬', label: '聊天' },
   { path: '/location', icon: '📍', label: '位置' },
   { path: '/me', icon: '👤', label: '我的' }
 ]
@@ -162,7 +163,10 @@ const editItem = item => {
   nextTick(() => titleInput.value?.focus())
 }
 const closeModal = () => { showModal.value = false; editingItem.value = null }
-const persistItems = () => localStorage.setItem('loveDiary_bucketList', JSON.stringify(items.value))
+const persistItems = () => {
+  localStorage.setItem('loveDiary_bucketList', JSON.stringify(items.value))
+  pushSharedState('wishes', items.value)
+}
 const saveItem = () => {
   if (!form.value.title.trim()) return alert('请输入愿望名称')
   if (editingItem.value) {
@@ -185,21 +189,25 @@ const completeItem = (item) => {
   persistItems()
 }
 
-const loadItems = () => {
+const loadItems = async () => {
   const stored = localStorage.getItem('loveDiary_bucketList')
   if (stored) {
     items.value = JSON.parse(stored)
-    return
+  } else {
+    let legacy = []
+    try { legacy = JSON.parse(localStorage.getItem('loveDiary_wishes') || '[]') } catch {}
+    items.value = legacy.map(item => ({
+      id: String(item.id),
+      icon: item.icon || '✨',
+      title: item.title,
+      description: item.description || '',
+      completed: Boolean(item.completed),
+      targetDate: item.targetDate || item.target_date || ''
+    }))
   }
-  items.value = [
-    { id: '1', icon: '✈️', title: '一起旅行', description: '去海边度假', completed: false },
-    { id: '2', icon: '💍', title: '求婚', description: '准备惊喜求婚', completed: false },
-    { id: '3', icon: '🏠', title: '共同的家', description: '买一套属于我们的房子', completed: false },
-    { id: '4', icon: '🍳', title: '做一顿大餐', description: '为TA做一顿浪漫晚餐', completed: true },
-    { id: '5', icon: '🎬', title: '一起看电影', description: '去电影院看一场电影', completed: true },
-    { id: '6', icon: '💃', title: '学跳舞', description: '一起学一支舞蹈', completed: false }
-  ]
-  persistItems()
+  const shared = await hydrateSharedState('wishes', items.value)
+  if (shared.enabled && Array.isArray(shared.payload)) items.value = shared.payload
+  localStorage.setItem('loveDiary_bucketList', JSON.stringify(items.value))
 }
 
 onMounted(() => {

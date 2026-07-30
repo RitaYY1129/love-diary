@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { MockAPI } from '@/api/mock'
+import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
 export const useDiaryStore = defineStore('diary', () => {
   const entries = ref([])
@@ -9,6 +10,11 @@ export const useDiaryStore = defineStore('diary', () => {
     try {
       const response = await MockAPI.diary.list()
       entries.value = response.data
+      const shared = await hydrateSharedState('diary', entries.value)
+      if (shared.enabled && Array.isArray(shared.payload)) {
+        entries.value = shared.payload
+        localStorage.setItem('loveDiary_diaries', JSON.stringify(entries.value))
+      }
       return entries.value
     } catch (error) {
       console.error('Failed to load diary entries:', error)
@@ -29,6 +35,7 @@ export const useDiaryStore = defineStore('diary', () => {
     try {
       const response = await MockAPI.diary.create(data)
       entries.value.unshift(response)
+      pushSharedState('diary', entries.value)
       return response
     } catch (error) {
       console.error('Failed to create diary entry:', error)
@@ -43,6 +50,7 @@ export const useDiaryStore = defineStore('diary', () => {
       if (index !== -1) {
         entries.value[index] = response
       }
+      pushSharedState('diary', entries.value)
       return response
     } catch (error) {
       console.error('Failed to update diary entry:', error)
@@ -54,6 +62,7 @@ export const useDiaryStore = defineStore('diary', () => {
     try {
       await MockAPI.diary.delete(id)
       entries.value = entries.value.filter(e => e.id !== id)
+      pushSharedState('diary', entries.value)
       return true
     } catch (error) {
       console.error('Failed to delete diary entry:', error)

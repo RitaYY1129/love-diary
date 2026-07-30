@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { AuthAPI } from '@/api'
+import { requestWechatCode } from '@/native/wechat'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -47,9 +48,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const sendCode = async (phone) => {
+  const sendCode = async (phone, purpose = 'login') => {
     try {
-      const response = await AuthAPI.sendCode(phone)
+      const response = await AuthAPI.sendCode(phone, purpose)
       return {
         ok: true,
         message: response.devCode
@@ -58,6 +59,17 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (error) {
       return { ok: false, message: error.message || '发送失败' }
+    }
+  }
+
+  const loginByWechat = async () => {
+    try {
+      const code = await requestWechatCode()
+      const response = await AuthAPI.loginByWechat(code)
+      saveSession(response)
+      return { ok: true, message: '微信登录成功' }
+    } catch (error) {
+      return { ok: false, message: error.message || '微信登录失败' }
     }
   }
 
@@ -77,16 +89,28 @@ export const useAuthStore = defineStore('auth', () => {
         } catch (e) {
           console.error('Failed to parse stored user:', e)
         }
-        return
       }
       
       try {
         const response = await AuthAPI.getProfile()
-        user.value = response
-        localStorage.setItem('loveDiary_user', JSON.stringify(response))
+        user.value = response.user || response
+        localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
       } catch (error) {
         console.warn('Failed to load user from API:', error.message)
       }
+    }
+  }
+
+  const refreshProfile = async () => {
+    if (!token.value) return null
+    try {
+      const response = await AuthAPI.getProfile()
+      user.value = response.user || response
+      localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
+      return user.value
+    } catch (error) {
+      console.warn('Failed to refresh user profile:', error.message)
+      return null
     }
   }
 
@@ -95,10 +119,22 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await AuthAPI.bindPartner(partnerCode)
       if (user.value) {
         user.value.partner = response.partner
+        localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
       }
       return { ok: true, message: '绑定成功' }
     } catch (error) {
       return { ok: false, message: error.message || '绑定失败' }
+    }
+  }
+
+  const updateProfile = async data => {
+    try {
+      const response = await AuthAPI.updateProfile(data)
+      user.value = { ...user.value, ...(response.user || data) }
+      localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
+      return { ok: true, message: response.message || '资料已更新' }
+    } catch (error) {
+      return { ok: false, message: error.message || '资料更新失败' }
     }
   }
 
@@ -126,9 +162,12 @@ export const useAuthStore = defineStore('auth', () => {
     loginByCode,
     register,
     sendCode,
+    loginByWechat,
     logout,
     loadUser,
+    refreshProfile,
     bindPartner,
+    updateProfile,
     bindVirtualPartner
   }
 })

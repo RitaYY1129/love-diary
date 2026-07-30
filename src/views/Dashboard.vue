@@ -112,7 +112,7 @@ const currentPath = computed(() => route.path)
 const tabs = [
   { path: '/home', icon: '🏠', label: '首页' },
   { path: '/anniversary', icon: '♡', label: '纪念日' },
-  { path: '/photo', icon: '📸', label: '足迹' },
+  { path: '/chat', icon: '💬', label: '聊天' },
   { path: '/location', icon: '📍', label: '位置' },
   { path: '/me', icon: '👤', label: '我的' }
 ]

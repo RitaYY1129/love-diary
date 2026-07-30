@@ -14,11 +14,14 @@
     </header>
 
     <main class="home-main">
-      <section class="love-hero">
-        <div class="hero-glow hero-glow-one"></div>
-        <div class="hero-glow hero-glow-two"></div>
-        <span class="hero-doodle doodle-one">♡</span>
-        <span class="hero-doodle doodle-two">✦</span>
+      <section class="love-hero" :style="heroCardStyle">
+        <button class="hero-customize-button" type="button" aria-label="自定义情侣卡片" @click="showHeroCustomizer = true">✦ 装扮</button>
+        <template v-if="heroSettings.showDecorations">
+          <div class="hero-glow hero-glow-one"></div>
+          <div class="hero-glow hero-glow-two"></div>
+          <span class="hero-doodle doodle-one">♡</span>
+          <span class="hero-doodle doodle-two">✦</span>
+        </template>
 
         <div class="couple-row">
           <button class="avatar-button" @click="changeAvatar('user')">
@@ -44,7 +47,7 @@
           <span>{{ partnerName }}</span>
         </div>
 
-        <div class="hero-stats">
+        <div v-if="heroSettings.showStats" class="hero-stats">
           <div>
             <strong>{{ loveValue }}</strong>
             <span>恋爱值</span>
@@ -124,11 +127,11 @@
 
         <button class="memory-collage" @click="go('/photo')">
           <div class="memory-main">
-            <img :src="memoryCafe" alt="咖啡馆里的情侣回忆" />
+            <img :src="homePhotos[0]?.url || memoryCafe" alt="首页相册回忆" />
             <span>把普通日子<br />过成喜欢的样子</span>
           </div>
           <div class="memory-side">
-            <img :src="memoryMorning" alt="清晨的情侣回忆" />
+            <img :src="homePhotos[1]?.url || homePhotos[0]?.url || memoryMorning" alt="首页相册回忆" />
             <div class="memory-note">
               <span>♥</span>
               <strong>{{ memoryCount || '0' }} 个瞬间</strong>
@@ -167,7 +170,7 @@
             <em>{{ upcomingPlan ? planDateText(upcomingPlan) : '去添加' }}</em>
           </button>
 
-          <button @click="go('/wishes')">
+          <button @click="go('/bucketlist')">
             <span class="list-icon wish-icon">☆</span>
             <span class="list-copy">
               <small>心愿清单</small>
@@ -206,6 +209,62 @@
       </button>
     </nav>
 
+    <div v-if="showHeroCustomizer" class="hero-customizer" @click.self="closeHeroCustomizer">
+      <section class="hero-customizer-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-heading">
+          <div><small>COUPLE CARD</small><h2>自定义情侣卡片</h2></div>
+          <button type="button" @click="closeHeroCustomizer">完成</button>
+        </div>
+
+        <div class="hero-preset-list">
+          <button
+            v-for="preset in heroPresets"
+            :key="preset.name"
+            type="button"
+            :style="{ background: `linear-gradient(135deg,${preset.from},${preset.to})` }"
+            @click="applyHeroPreset(preset)"
+          ><span>✓</span><small>{{ preset.name }}</small></button>
+        </div>
+
+        <div class="hero-setting-card">
+          <div class="color-row">
+            <label><span>左侧颜色</span><input v-model="heroSettings.colorFrom" type="color" @input="saveHeroSettings"></label>
+            <label><span>右侧颜色</span><input v-model="heroSettings.colorTo" type="color" @input="saveHeroSettings"></label>
+            <label><span>文字颜色</span><input v-model="heroSettings.textColor" type="color" @input="saveHeroSettings"></label>
+          </div>
+
+          <button class="hero-image-upload" type="button" @click="heroImageInput?.click()">
+            <img v-if="heroSettings.backgroundImage" :src="heroSettings.backgroundImage" alt="">
+            <span v-else>▧<small>上传背景照片</small></span>
+            <em>{{ heroSettings.backgroundImage ? '更换图片' : '支持相册图片' }}</em>
+          </button>
+          <input ref="heroImageInput" type="file" accept="image/*" hidden @change="selectHeroImage">
+          <button v-if="heroSettings.backgroundImage" class="remove-hero-image" type="button" @click="removeHeroImage">移除背景图片</button>
+
+          <label class="range-setting">
+            <span><b>图片遮罩</b><small>{{ Math.round(heroSettings.overlay * 100) }}%</small></span>
+            <input v-model.number="heroSettings.overlay" type="range" min="0" max=".7" step=".05" @input="saveHeroSettings">
+          </label>
+          <label class="range-setting">
+            <span><b>卡片圆角</b><small>{{ heroSettings.radius }}px</small></span>
+            <input v-model.number="heroSettings.radius" type="range" min="12" max="48" step="2" @input="saveHeroSettings">
+          </label>
+          <label class="range-setting">
+            <span><b>图片位置</b><small>{{ heroSettings.position }}%</small></span>
+            <input v-model.number="heroSettings.position" type="range" min="0" max="100" step="5" @input="saveHeroSettings">
+          </label>
+        </div>
+
+        <div class="hero-toggle-card">
+          <label><span><b>显示爱心装饰</b><small>隐藏或显示卡片上的图形</small></span><input v-model="heroSettings.showDecorations" type="checkbox" @change="saveHeroSettings"><i></i></label>
+          <label><span><b>显示底部统计</b><small>恋爱值、日记和回忆统计</small></span><input v-model="heroSettings.showStats" type="checkbox" @change="saveHeroSettings"><i></i></label>
+        </div>
+
+        <button class="reset-hero-card" type="button" @click="resetHeroSettings">恢复默认卡片</button>
+      </section>
+    </div>
+
     <div v-if="toast" class="home-toast">{{ toast }}</div>
   </div>
 </template>
@@ -233,9 +292,48 @@ const wishes = ref([])
 const plans = ref([])
 const fundData = ref({ totalAmount: 0, transactions: [] })
 const photoRecords = ref([])
+const photoAlbums = ref([])
 const checkingIn = ref(false)
 const toast = ref('')
 const installPrompt = ref(null)
+const showHeroCustomizer = ref(false)
+const heroImageInput = ref(null)
+
+const defaultHeroSettings = () => ({
+  colorFrom: '#f38aa9',
+  colorTo: '#d65379',
+  textColor: '#ffffff',
+  backgroundImage: '',
+  overlay: .22,
+  radius: 34,
+  position: 50,
+  showDecorations: true,
+  showStats: true
+})
+const heroStorageKey = () => `loveDiary_heroStyle_${authStore.user?.id || 'local'}`
+const loadHeroSettings = () => {
+  try {
+    return { ...defaultHeroSettings(), ...JSON.parse(localStorage.getItem(heroStorageKey()) || '{}') }
+  } catch {
+    return defaultHeroSettings()
+  }
+}
+const heroSettings = ref(loadHeroSettings())
+const heroPresets = [
+  { name: '樱花粉', from: '#f5a2b7', to: '#d55579' },
+  { name: '云朵蓝', from: '#8ed4f2', to: '#58a9de' },
+  { name: '奶油杏', from: '#eac9a9', to: '#c98e73' },
+  { name: '暮莓紫', from: '#c596bd', to: '#8f638f' },
+  { name: '蜜桃橘', from: '#f6b392', to: '#df7d76' }
+]
+const heroCardStyle = computed(() => ({
+  background: heroSettings.value.backgroundImage
+    ? `linear-gradient(rgba(27,16,21,${heroSettings.value.overlay}),rgba(27,16,21,${heroSettings.value.overlay})),url("${heroSettings.value.backgroundImage}") center ${heroSettings.value.position}% / cover no-repeat`
+    : `linear-gradient(135deg,${heroSettings.value.colorFrom},${heroSettings.value.colorTo})`,
+  color: heroSettings.value.textColor,
+  borderRadius: `${heroSettings.value.radius}px`,
+  '--hero-text-color': heroSettings.value.textColor
+}))
 
 const userName = computed(() => authStore.user?.nickname || authStore.user?.username || '我')
 const partnerName = computed(() => authStore.user?.partner?.nickname || 'TA')
@@ -250,6 +348,8 @@ const loveDays = computed(() => {
 
 const diaryCount = computed(() => diaryStore.entries?.length || 0)
 const memoryCount = computed(() => photoRecords.value.reduce((total, record) => total + (record.photos?.length || 0), 0))
+const homeAlbum = computed(() => photoAlbums.value.find(album => album.homeVisible) || photoAlbums.value[0] || null)
+const homePhotos = computed(() => homeAlbum.value?.photos || [])
 const loveValue = computed(() => {
   return 5200 + loveDays.value * 3 + diaryCount.value * 18 + checkinStore.history.length * 12
 })
@@ -297,7 +397,7 @@ const shortcuts = [
   { label: '纪念日', desc: '重要日子', path: '/anniversary', icon: 'calendar', bg: '#fff1ee', color: '#f07869' },
   { label: '共同记账', desc: '每笔生活', path: '/fund', icon: 'wallet', bg: '#fff8e7', color: '#c9912e' },
   { label: '情侣相册', desc: '珍藏回忆', path: '/photo', icon: 'image', bg: '#eef8ff', color: '#438dbe' },
-  { label: '愿望清单', desc: '一起实现', path: '/wishes', icon: 'star', bg: '#f3f0ff', color: '#8268cf' },
+  { label: '愿望清单', desc: '一起实现', path: '/bucketlist', icon: 'star', bg: '#f3f0ff', color: '#8268cf' },
   { label: '未来计划', desc: '奔赴未来', path: '/plan', icon: 'flag', bg: '#edfaf4', color: '#4d9c78' },
   { label: '情侣互动', desc: '默契升温', path: '/games', icon: 'game', bg: '#fff1f7', color: '#dd6391' },
   { label: '悄悄话', desc: '说给你听', path: '/vent', icon: 'message', bg: '#eef5ff', color: '#5d82bd' }
@@ -306,7 +406,7 @@ const shortcuts = [
 const tabs = [
   { label: '我们', path: '/home', icon: 'home' },
   { label: '纪念日', path: '/anniversary', icon: 'calendar' },
-  { label: '相册', path: '/photo', icon: 'image' },
+  { label: '聊天', path: '/chat', icon: 'message' },
   { label: '位置', path: '/location', icon: 'pin' },
   { label: '我的', path: '/me', icon: 'user' }
 ]
@@ -353,7 +453,8 @@ function isTabActive(path) {
 }
 
 function changeAvatar(target) {
-  router.push({ path: '/settings', query: { avatar: target } })
+  if (target === 'user') router.push('/profile')
+  else router.push('/me')
 }
 
 function showToast(message, duration = 2600) {
@@ -361,6 +462,73 @@ function showToast(message, duration = 2600) {
   window.setTimeout(() => {
     if (toast.value === message) toast.value = ''
   }, duration)
+}
+
+function saveHeroSettings() {
+  try {
+    localStorage.setItem(heroStorageKey(), JSON.stringify(heroSettings.value))
+  } catch {
+    showToast('背景图片过大，请换一张图片')
+  }
+}
+
+function closeHeroCustomizer() {
+  saveHeroSettings()
+  showHeroCustomizer.value = false
+}
+
+function applyHeroPreset(preset) {
+  heroSettings.value.colorFrom = preset.from
+  heroSettings.value.colorTo = preset.to
+  heroSettings.value.backgroundImage = ''
+  saveHeroSettings()
+  showToast(`${preset.name}已应用`)
+}
+
+const resizeHeroImage = file => new Promise((resolve, reject) => {
+  const image = new Image()
+  const url = URL.createObjectURL(file)
+  image.onload = () => {
+    const maxWidth = 1500
+    const scale = Math.min(1, maxWidth / image.naturalWidth)
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height)
+    URL.revokeObjectURL(url)
+    resolve(canvas.toDataURL('image/jpeg', .78))
+  }
+  image.onerror = () => {
+    URL.revokeObjectURL(url)
+    reject(new Error('图片读取失败'))
+  }
+  image.src = url
+})
+
+async function selectHeroImage(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) return showToast('请选择图片文件')
+  if (file.size > 18 * 1024 * 1024) return showToast('原图不能超过 18MB')
+  try {
+    heroSettings.value.backgroundImage = await resizeHeroImage(file)
+    saveHeroSettings()
+    showToast('情侣卡片背景已更换')
+  } catch (error) {
+    showToast(error.message || '图片处理失败')
+  }
+}
+
+function removeHeroImage() {
+  heroSettings.value.backgroundImage = ''
+  saveHeroSettings()
+}
+
+function resetHeroSettings() {
+  heroSettings.value = defaultHeroSettings()
+  saveHeroSettings()
+  showToast('已恢复默认卡片')
 }
 
 function captureInstallPrompt(event) {
@@ -444,6 +612,12 @@ onMounted(async () => {
     fundData.value = { totalAmount: 0, transactions: [] }
   }
   photoRecords.value = readLocal('loveDiary_photoRecords')
+  photoAlbums.value = readLocal('loveDiary_albums')
+  if (photoAlbums.value.length) {
+    photoRecords.value = [{ photos: photoAlbums.value.flatMap(album => album.photos || []) }]
+  }
+  wishes.value = readLocal('loveDiary_bucketList')
+  if (!wishes.value.length) wishes.value = readLocal('loveDiary_wishes')
 
   const tasks = [
     moodStore.list?.(),
@@ -451,14 +625,12 @@ onMounted(async () => {
     checkinStore.loadHistory?.(),
     checkinStore.loadStreak?.(),
     MockAPI.anniversary.list(),
-    MockAPI.wish.list(),
     MockAPI.plan.list()
   ]
 
   const results = await Promise.allSettled(tasks)
   if (results[4]?.status === 'fulfilled') anniversaries.value = results[4].value?.data || []
-  if (results[5]?.status === 'fulfilled') wishes.value = results[5].value?.data || []
-  if (results[6]?.status === 'fulfilled') plans.value = results[6].value?.data || []
+  if (results[5]?.status === 'fulfilled') plans.value = results[5].value?.data || []
 })
 
 onBeforeUnmount(() => {
@@ -1279,5 +1451,287 @@ button {
   .status-card {
     padding: 14px;
   }
+}
+
+/* 首页与主题中心联动 */
+.home-page {
+  background:
+    linear-gradient(rgba(255,255,255,calc(1 - var(--theme-background-opacity))),rgba(255,255,255,calc(1 - var(--theme-background-opacity)))),
+    var(--theme-background-image) center top/cover fixed no-repeat,
+    linear-gradient(180deg,color-mix(in srgb,var(--theme-soft) 76%,white) 0,var(--theme-soft) 420px,#fffaf8 100%);
+}
+.love-hero {
+  background:
+    linear-gradient(135deg,rgba(255,255,255,.16),transparent 38%),
+    linear-gradient(135deg,color-mix(in srgb,var(--theme-primary) 72%,white),var(--theme-primary) 50%,color-mix(in srgb,var(--theme-primary) 78%,#63384a));
+  box-shadow: 0 18px 42px color-mix(in srgb,var(--theme-primary) 25%,transparent);
+}
+.checkin-card button:not(.checked),
+.install-app-button {
+  background: linear-gradient(135deg,var(--theme-primary),color-mix(in srgb,var(--theme-primary) 76%,#63384a)) !important;
+}
+.checkin-icon,.section-heading>div>span,.section-heading>button,.today-date,.couple-names i {
+  color: var(--theme-primary) !important;
+}
+.bottom-nav button.active {
+  color: var(--theme-primary) !important;
+}
+.bottom-nav button.active::before {
+  background: var(--theme-soft) !important;
+}
+:global(html[data-card-style="soft"]) .status-card,
+:global(html[data-card-style="soft"]) .section-block,
+:global(html[data-card-style="soft"]) .checkin-card {
+  border-radius: 14px !important;
+}
+:global(html[data-card-style="round"]) .status-card,
+:global(html[data-card-style="round"]) .section-block,
+:global(html[data-card-style="round"]) .checkin-card {
+  border-radius: 24px !important;
+}
+:global(html[data-decorations="off"]) .hero-glow,
+:global(html[data-decorations="off"]) .hero-doodle {
+  display: none !important;
+}
+
+.love-hero .love-days,
+.love-hero .love-days span,
+.love-hero .love-days strong,
+.love-hero .love-days em,
+.love-hero .couple-names,
+.love-hero .couple-names i,
+.love-hero .hero-stats,
+.love-hero .hero-stats strong,
+.love-hero .hero-stats span {
+  color: var(--hero-text-color, #fff) !important;
+}
+.hero-customize-button {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  right: 13px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255,255,255,.36);
+  border-radius: 999px;
+  background: rgba(65,34,45,.2);
+  color: #fff;
+  font-size: 8px;
+  backdrop-filter: blur(9px);
+}
+.hero-customizer {
+  position: fixed;
+  z-index: 300;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(48,31,37,.42);
+  backdrop-filter: blur(5px);
+}
+.hero-customizer-sheet {
+  width: min(100%, 680px);
+  max-height: 88dvh;
+  overflow-y: auto;
+  padding: 8px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 26px 26px 0 0;
+  background: #fffafa;
+  box-shadow: 0 -15px 50px rgba(67,38,47,.18);
+}
+.sheet-handle {
+  width: 38px;
+  height: 4px;
+  margin: 1px auto 11px;
+  border-radius: 99px;
+  background: #ddcdd1;
+}
+.sheet-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sheet-heading small {
+  color: var(--theme-primary);
+  font-size: 7px;
+  letter-spacing: .12em;
+}
+.sheet-heading h2 {
+  margin-top: 2px;
+  color: #4e3940;
+  font-size: 16px;
+}
+.sheet-heading>button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--theme-primary);
+  color: #fff;
+  font-size: 10px;
+}
+.hero-preset-list {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 15px;
+}
+.hero-preset-list button {
+  position: relative;
+  height: 66px;
+  overflow: hidden;
+  border: 2px solid #fff;
+  border-radius: 15px;
+  box-shadow: 0 3px 12px rgba(73,44,53,.09);
+  color: #fff;
+}
+.hero-preset-list button>span {
+  display: block;
+  font-size: 13px;
+}
+.hero-preset-list button small {
+  display: block;
+  margin-top: 4px;
+  font-size: 7px;
+}
+.hero-setting-card,.hero-toggle-card {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #eee1e4;
+  border-radius: 18px;
+  background: #fff;
+}
+.color-row {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 8px;
+}
+.color-row label {
+  padding: 8px;
+  border-radius: 12px;
+  background: #faf5f5;
+  color: #846970;
+  font-size: 8px;
+  text-align: center;
+}
+.color-row input {
+  width: 100%;
+  height: 28px;
+  display: block;
+  margin-top: 6px;
+  padding: 1px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+.hero-image-upload {
+  position: relative;
+  width: 100%;
+  height: 108px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  margin-top: 12px;
+  border: 1px dashed color-mix(in srgb,var(--theme-primary) 38%,#ddd);
+  border-radius: 15px;
+  background: var(--theme-soft);
+  color: var(--theme-primary);
+}
+.hero-image-upload img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hero-image-upload>span {
+  font-size: 22px;
+}
+.hero-image-upload>span small {
+  display: block;
+  margin-top: 4px;
+  font-size: 8px;
+}
+.hero-image-upload>em {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  background: rgba(47,31,36,.64);
+  color: #fff;
+  font-size: 7px;
+  font-style: normal;
+}
+.remove-hero-image {
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px;
+  border: 0;
+  border-radius: 9px;
+  background: #f8f0f2;
+  color: #a26976;
+  font-size: 8px;
+}
+.range-setting {
+  display: block;
+  margin-top: 12px;
+}
+.range-setting>span {
+  display: flex;
+  justify-content: space-between;
+  color: #72565e;
+  font-size: 9px;
+}
+.range-setting small {
+  color: var(--theme-primary);
+}
+.range-setting input {
+  width: 100%;
+  margin-top: 7px;
+  accent-color: var(--theme-primary);
+}
+.hero-toggle-card label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+.hero-toggle-card label+label {
+  border-top: 1px solid #f1e6e8;
+}
+.hero-toggle-card span b,.hero-toggle-card span small {
+  display: block;
+}
+.hero-toggle-card b { color: #654a52; font-size: 10px; }
+.hero-toggle-card small { margin-top: 3px; color: #aa9096; font-size: 7px; }
+.hero-toggle-card input { position: absolute; opacity: 0; }
+.hero-toggle-card i {
+  width: 40px;
+  height: 23px;
+  padding: 3px;
+  border-radius: 99px;
+  background: #d9cdd0;
+  transition: .2s;
+}
+.hero-toggle-card i::before {
+  content: "";
+  display: block;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  transition: .2s;
+}
+.hero-toggle-card input:checked+i { background: var(--theme-primary); }
+.hero-toggle-card input:checked+i::before { transform: translateX(17px); }
+.reset-hero-card {
+  width: 100%;
+  margin-top: 11px;
+  padding: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: #f4ecee;
+  color: #936d77;
+  font-size: 9px;
+}
+@media(max-width:390px) {
+  .hero-preset-list { grid-template-columns: repeat(3,1fr); }
 }
 </style>

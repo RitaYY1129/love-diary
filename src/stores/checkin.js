@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { MockAPI } from '@/api/mock'
+import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
 export const useCheckinStore = defineStore('checkin', () => {
   const history = ref([])
@@ -15,6 +16,7 @@ export const useCheckinStore = defineStore('checkin', () => {
           history.value.push(today)
         }
         streak.value = response.streak
+        pushSharedState('checkin', history.value)
       }
       return response
     } catch (error) {
@@ -27,6 +29,8 @@ export const useCheckinStore = defineStore('checkin', () => {
     try {
       const response = await MockAPI.checkin.getHistory()
       history.value = response.data
+      const shared = await hydrateSharedState('checkin', history.value)
+      if (shared.enabled && Array.isArray(shared.payload)) history.value = shared.payload
       return history.value
     } catch (error) {
       console.error('Failed to load checkin history:', error)

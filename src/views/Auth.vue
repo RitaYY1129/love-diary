@@ -115,6 +115,28 @@
           </button>
         </form>
 
+        <div v-if="mode === 'login'" class="flex items-center gap-3 my-5">
+          <span class="h-px flex-1 bg-gray-200"></span>
+          <span class="text-xs text-gray-400">其他登录方式</span>
+          <span class="h-px flex-1 bg-gray-200"></span>
+        </div>
+
+        <button
+          v-if="mode === 'login'"
+          type="button"
+          class="btn btn-block text-white bg-[#07c160] hover:bg-[#06ad56]"
+          :disabled="isSubmitting"
+          @click="handleWechatLogin"
+        >
+          <span class="mr-2 text-lg">微信</span>
+          微信一键登录
+        </button>
+
+        <label class="mt-4 flex items-start justify-center gap-2 text-xs text-gray-500">
+          <input v-model="agreedToTerms" type="checkbox" class="mt-0.5" />
+          <span>我已阅读并同意《用户协议》和《隐私政策》</span>
+        </label>
+
         <div class="mt-6 text-center">
           <button @click="showPartnerBind = true" class="text-primary text-sm">
             绑定另一半
@@ -149,12 +171,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const router = useRouter()
+
+// 登录页空闲时先加载首页模块，避免首次登录后才现场编译页面。
+onMounted(() => {
+  import('@/views/Home.vue')
+})
 
 const mode = ref('login')
 const loginWithCode = ref(true)
@@ -162,6 +189,7 @@ const rememberMe = ref(false)
 const showPartnerBind = ref(false)
 const partnerCode = ref('')
 const isSubmitting = ref(false)
+const agreedToTerms = ref(false)
 
 const form = ref({
   phone: '',
@@ -197,7 +225,7 @@ const sendCode = async () => {
   codeButtonDisabled.value = true
   codeButtonText.value = '60s'
   
-  const result = await authStore.sendCode(form.value.phone)
+  const result = await authStore.sendCode(form.value.phone, mode.value)
   if (!result.ok) {
     showToast(result.message)
     codeButtonDisabled.value = false
@@ -221,6 +249,11 @@ const sendCode = async () => {
 }
 
 const handleSubmit = async () => {
+  if (!agreedToTerms.value) {
+    showToast('请先阅读并同意用户协议和隐私政策')
+    return
+  }
+
   if (!isValidPhone(form.value.phone)) {
     showToast('请输入正确的11位手机号')
     return
@@ -266,10 +299,7 @@ const handleSubmit = async () => {
   isSubmitting.value = false
   
   if (result.ok) {
-    showToast(result.message)
-    setTimeout(() => {
-      router.push('/home')
-    }, 1500)
+    await router.replace('/home')
   } else {
     showToast(result.message)
   }
@@ -308,6 +338,23 @@ const bindVirtualPartner = () => {
     localStorage.setItem('loveDiary_partner', JSON.stringify(virtualPartner))
     showToast('虚拟情人绑定成功')
     showPartnerBind.value = false
+  }
+}
+
+const handleWechatLogin = async () => {
+  if (!agreedToTerms.value) {
+    showToast('请先阅读并同意用户协议和隐私政策')
+    return
+  }
+
+  isSubmitting.value = true
+  const result = await authStore.loginByWechat()
+  isSubmitting.value = false
+
+  if (result.ok) {
+    await router.replace('/home')
+  } else {
+    showToast(result.message, 3500)
   }
 }
 
