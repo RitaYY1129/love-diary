@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { supabaseAuth, supabaseRest } from './supabase'
+import { supabaseAuth, supabaseRest, supabaseFunctions } from './supabase'
 
 // 开发环境使用同源代理，避免手机访问局域网地址时把 localhost 解析成手机自身。
 // Android/生产构建仍由 VITE_API_BASE 指向正式 HTTPS 后端。
@@ -48,6 +48,27 @@ export const AuthAPI = {
     const user = await supabaseAuth.getUser(session.access_token)
     const profiles = await supabaseRest.get(`profiles?id=eq.${user.id}&select=*`, session.access_token)
     return { token: session.access_token, user: profiles[0] || user }
+  },
+
+  sendEmailCode: async email => await supabaseAuth.sendEmailCode(email),
+
+  registerByEmailCode: async (username, email, code, password) => {
+    const session = await supabaseAuth.verifyEmailCode(email, code)
+    const user = await supabaseAuth.updateUser(session.access_token, {
+      password,
+      data: { username: username.trim().toLowerCase(), identifier: email.trim().toLowerCase() }
+    })
+    const profiles = await supabaseRest.patch(
+      `profiles?id=eq.${user.id}`,
+      { username: username.trim().toLowerCase(), identifier: email.trim(), nickname: username.trim() },
+      session.access_token
+    )
+    return { token: session.access_token, user: profiles[0] || user }
+  },
+
+  registerByPhone: async (username, phone, password) => {
+    await supabaseFunctions.registerPhone({ username, phone, password })
+    return await AuthAPI.login(phone, password)
   },
 
   loginByWechat: async (code) => {

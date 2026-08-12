@@ -37,6 +37,35 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  const sendEmailCode = async email => {
+    try {
+      await AuthAPI.sendEmailCode(email)
+      return { ok: true, message: '验证码已发送，请查看邮箱' }
+    } catch (error) {
+      return { ok: false, message: error.message || '验证码发送失败' }
+    }
+  }
+
+  const registerByEmailCode = async (username, email, code, password) => {
+    try {
+      const response = await AuthAPI.registerByEmailCode(username, email, code, password)
+      saveSession(response)
+      return { ok: true, message: '注册成功' }
+    } catch (error) {
+      return { ok: false, message: error.message || '注册失败' }
+    }
+  }
+
+  const registerByPhone = async (username, phone, password) => {
+    try {
+      const response = await AuthAPI.registerByPhone(username, phone, password)
+      saveSession(response)
+      return { ok: true, message: '注册成功' }
+    } catch (error) {
+      return { ok: false, message: error.message || '注册失败' }
+    }
+  }
+
 
   const logout = () => {
     user.value = null
@@ -126,6 +155,9 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn,
     login,
     register,
+    sendEmailCode,
+    registerByEmailCode,
+    registerByPhone,
     logout,
     loadUser,
     refreshProfile,

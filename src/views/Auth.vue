@@ -38,24 +38,32 @@
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">用户名 / 邮箱 / 手机号</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">{{ mode === 'register' ? '邮箱或手机号' : '用户名 / 邮箱 / 手机号' }}</label>
               <input 
                 v-model="form.identifier"
                 type="text"
                 autocomplete="username"
                 class="form-input" 
-                placeholder="请输入用户名、邮箱或手机号"
+                :placeholder="mode === 'register' ? '邮箱会发送验证码；手机号无需验证码' : '请输入用户名、邮箱或手机号'"
               />
+            </div>
+
+            <div v-if="mode === 'register' && isEmail">
+              <label class="block text-sm font-medium text-gray-700 mb-2">邮箱验证码</label>
+              <div class="flex gap-2">
+                <input v-model="form.emailCode" type="text" inputmode="numeric" autocomplete="one-time-code" class="form-input flex-1" placeholder="请输入邮箱中的验证码" maxlength="8" />
+                <button type="button" class="btn btn-outline shrink-0" :disabled="codeSending || codeCooldown > 0" @click="sendEmailCode">
+                  {{ codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
+                </button>
+              </div>
             </div>
 
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
-              <input 
-                v-model="form.password" 
-                type="password" 
-                class="form-input" 
-                placeholder="请输入密码"
-              />
+              <div class="relative">
+                <input v-model="form.password" :type="showPassword ? 'text' : 'password'" class="form-input pr-16" placeholder="请输入至少 6 位密码" />
+                <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-primary" @click="showPassword = !showPassword">{{ showPassword ? '隐藏' : '显示' }}</button>
+              </div>
             </div>
 
             <div v-if="mode === 'login'" class="flex justify-between text-sm">
@@ -132,11 +140,15 @@ const showPartnerBind = ref(false)
 const partnerCode = ref('')
 const isSubmitting = ref(false)
 const agreedToTerms = ref(false)
+const showPassword = ref(false)
+const codeSending = ref(false)
+const codeCooldown = ref(0)
 
 const form = ref({
   username: '',
   identifier: '',
   password: '',
+  emailCode: ''
 })
 
 const toast = ref({
@@ -149,6 +161,24 @@ const showToast = (message, duration = 2000) => {
   setTimeout(() => {
     toast.value.show = false
   }, duration)
+}
+
+const isEmail = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.identifier.trim()))
+const isPhone = computed(() => /^1[3-9]\d{9}$/.test(form.value.identifier.trim()))
+
+const sendEmailCode = async () => {
+  if (!isEmail.value) return showToast('请先输入正确的邮箱')
+  codeSending.value = true
+  const result = await authStore.sendEmailCode(form.value.identifier.trim())
+  codeSending.value = false
+  showToast(result.message)
+  if (result.ok) {
+    codeCooldown.value = 60
+    const timer = setInterval(() => {
+      codeCooldown.value -= 1
+      if (codeCooldown.value <= 0) clearInterval(timer)
+    }, 1000)
+  }
 }
 
 const handleSubmit = async () => {
@@ -167,8 +197,16 @@ const handleSubmit = async () => {
       showToast('请输入用户名')
       return
     }
-    if (!form.value.password) {
-      showToast('请输入密码')
+    if (!isEmail.value && !isPhone.value) {
+      showToast('注册时请输入正确的邮箱或手机号')
+      return
+    }
+    if (isEmail.value && !form.value.emailCode.trim()) {
+      showToast('请输入邮箱验证码')
+      return
+    }
+    if (form.value.password.length < 6) {
+      showToast('密码至少需要 6 位')
       return
     }
   } else if (!form.value.password) {
@@ -182,7 +220,9 @@ const handleSubmit = async () => {
   if (mode.value === 'login') {
     result = await authStore.login(form.value.identifier, form.value.password)
   } else {
-    result = await authStore.register(form.value.username, form.value.identifier, form.value.password)
+    result = isEmail.value
+      ? await authStore.registerByEmailCode(form.value.username, form.value.identifier.trim(), form.value.emailCode.trim(), form.value.password)
+      : await authStore.registerByPhone(form.value.username, form.value.identifier.trim(), form.value.password)
   }
   
   isSubmitting.value = false

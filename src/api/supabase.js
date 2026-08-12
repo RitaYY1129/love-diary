@@ -59,6 +59,21 @@ export const supabaseAuth = {
       body: JSON.stringify({ email: authEmailFor(identifier), password })
     })
   },
+  sendEmailCode(email) {
+    return request('/auth/v1/otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, should_create_user: true })
+    })
+  },
+  verifyEmailCode(email, token) {
+    return request('/auth/v1/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email, token, type: 'email' })
+    })
+  },
+  updateUser(accessToken, data) {
+    return request('/auth/v1/user', { method: 'PUT', body: JSON.stringify(data) }, accessToken)
+  },
   getUser(accessToken) {
     return request('/auth/v1/user', {}, accessToken)
   }
@@ -69,4 +84,11 @@ export const supabaseRest = {
   post(path, body, token, headers = {}) {
     return request(`/rest/v1/${path}`, { method: 'POST', body: JSON.stringify(body), headers }, token)
   }
+  ,patch(path, body, token) {
+    return request(`/rest/v1/${path}`, { method: 'PATCH', body: JSON.stringify(body), headers: { Prefer: 'return=representation' } }, token)
+  }
+}
+
+export const supabaseFunctions = {
+  registerPhone: (payload) => request('/functions/v1/register-phone', { method: 'POST', body: JSON.stringify(payload) })
 }
