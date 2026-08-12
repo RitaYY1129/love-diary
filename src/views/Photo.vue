@@ -126,6 +126,7 @@ const editingPhoto = ref(null)
 const moodOptions = ['🥰 心动', '😊 开心', '😌 安心', '🤭 惊喜', '🥺 感动', '🌙 平静']
 const recordForm = ref({ mood: '🥰 心动', note: '', capturedAt: '' })
 const toast = ref({ show: false, message: '' })
+const MAX_PHOTOS_PER_ALBUM = 255
 const currentAlbum = computed(() => albums.value.find(item => item.id === selectedAlbumId.value) || albums.value[0])
 const sortedPhotos = computed(() => [...(currentAlbum.value?.photos || [])].sort((a, b) => new Date(b.capturedAt) - new Date(a.capturedAt)))
 const showToast = message => { toast.value = { show: true, message }; setTimeout(() => { toast.value.show = false }, 1800) }
@@ -192,9 +193,13 @@ const compressPhoto = file => new Promise((resolve, reject) => {
   reader.readAsDataURL(file)
 })
 const handleFiles = async event => {
-  const files = [...(event.target.files || [])].filter(file => file.type.startsWith('image/')).slice(0, 8)
+  const selectedFiles = [...(event.target.files || [])].filter(file => file.type.startsWith('image/'))
+  const remaining = MAX_PHOTOS_PER_ALBUM - (currentAlbum.value?.photos?.length || 0)
   event.target.value = ''
+  if (remaining <= 0) return showToast('这个图集已达到 255 张照片上限')
+  const files = selectedFiles.slice(0, Math.min(8, remaining))
   if (!files.length) return
+  if (selectedFiles.length > files.length) showToast(`本次仅添加 ${files.length} 张，图集最多 255 张`)
   showToast('正在整理照片…')
   try {
     pendingPhotos.value = await Promise.all(files.map(async file => ({
@@ -227,9 +232,15 @@ const savePhotoRecord = () => {
       note: recordForm.value.note.trim(),
       capturedAt: index === 0 ? capturedAt : photo.capturedAt
     }))
+    if (additions.length > MAX_PHOTOS_PER_ALBUM - currentAlbum.value.photos.length) {
+      return showToast('这个图集最多只能保存 255 张照片')
+    }
     currentAlbum.value.photos.unshift(...additions)
   }
-  if (!persist()) return
+  if (!persist()) {
+    if (!wasEditing) currentAlbum.value.photos.splice(0, pendingPhotos.value.length)
+    return
+  }
   closeRecordModal()
   showToast(wasEditing ? '照片记录已更新' : '这一刻已经收藏')
 }

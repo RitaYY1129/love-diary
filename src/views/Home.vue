@@ -125,18 +125,14 @@
           <button @click="go('/photo')">查看相册</button>
         </div>
 
-        <button class="memory-collage" @click="go('/photo')">
-          <div class="memory-main">
-            <img :src="homePhotos[0]?.url || memoryCafe" alt="首页相册回忆" />
-            <span>把普通日子<br />过成喜欢的样子</span>
+        <button class="memory-carousel" @click="go('/photo')">
+          <img :src="activeHomePhoto?.url || memoryCafe" alt="最近添加的照片" />
+          <div class="memory-carousel-overlay">
+            <span>{{ activeHomePhoto?.note || '把普通日子过成喜欢的样子' }}</span>
+            <small v-if="recentHomePhotos.length > 1">{{ activeHomePhotoIndex + 1 }} / {{ recentHomePhotos.length }}</small>
           </div>
-          <div class="memory-side">
-            <img :src="homePhotos[1]?.url || homePhotos[0]?.url || memoryMorning" alt="首页相册回忆" />
-            <div class="memory-note">
-              <span>♥</span>
-              <strong>{{ memoryCount || '0' }} 个瞬间</strong>
-              <small>正在被好好收藏</small>
-            </div>
+          <div v-if="recentHomePhotos.length > 1" class="memory-dots">
+            <i v-for="(_, index) in recentHomePhotos" :key="index" :class="{ active: index === activeHomePhotoIndex }"></i>
           </div>
         </button>
       </section>
@@ -293,6 +289,8 @@ const plans = ref([])
 const fundData = ref({ totalAmount: 0, transactions: [] })
 const photoRecords = ref([])
 const photoAlbums = ref([])
+const activeHomePhotoIndex = ref(0)
+let homeCarouselTimer = null
 const checkingIn = ref(false)
 const toast = ref('')
 const installPrompt = ref(null)
@@ -347,9 +345,19 @@ const loveDays = computed(() => {
 })
 
 const diaryCount = computed(() => diaryStore.entries?.length || 0)
-const memoryCount = computed(() => photoRecords.value.reduce((total, record) => total + (record.photos?.length || 0), 0))
-const homeAlbum = computed(() => photoAlbums.value.find(album => album.homeVisible) || photoAlbums.value[0] || null)
-const homePhotos = computed(() => homeAlbum.value?.photos || [])
+const allAlbumPhotos = computed(() => photoAlbums.value.flatMap(album => album.photos || []))
+const memoryCount = computed(() => allAlbumPhotos.value.length || photoRecords.value.reduce((total, record) => total + (record.photos?.length || 0), 0))
+const recentHomePhotos = computed(() => [...allAlbumPhotos.value]
+  .sort((a, b) => new Date(b.capturedAt || 0) - new Date(a.capturedAt || 0))
+  .slice(0, 10))
+const activeHomePhoto = computed(() => recentHomePhotos.value[activeHomePhotoIndex.value] || null)
+const startHomeCarousel = () => {
+  clearInterval(homeCarouselTimer)
+  if (recentHomePhotos.value.length < 2) return
+  homeCarouselTimer = window.setInterval(() => {
+    activeHomePhotoIndex.value = (activeHomePhotoIndex.value + 1) % recentHomePhotos.value.length
+  }, 3600)
+}
 const loveValue = computed(() => {
   return 5200 + loveDays.value * 3 + diaryCount.value * 18 + checkinStore.history.length * 12
 })
@@ -616,6 +624,8 @@ onMounted(async () => {
   if (photoAlbums.value.length) {
     photoRecords.value = [{ photos: photoAlbums.value.flatMap(album => album.photos || []) }]
   }
+  activeHomePhotoIndex.value = 0
+  startHomeCarousel()
   wishes.value = readLocal('loveDiary_bucketList')
   if (!wishes.value.length) wishes.value = readLocal('loveDiary_wishes')
 
@@ -632,6 +642,8 @@ onMounted(async () => {
   if (results[4]?.status === 'fulfilled') anniversaries.value = results[4].value?.data || []
   if (results[5]?.status === 'fulfilled') plans.value = results[5].value?.data || []
 })
+
+onBeforeUnmount(() => clearInterval(homeCarouselTimer))
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
@@ -1087,83 +1099,54 @@ button {
   white-space: nowrap;
 }
 
-.memory-collage {
-  display: grid;
+.memory-carousel {
+  position: relative;
+  display: block;
   overflow: hidden;
   width: 100%;
   height: 238px;
   padding: 0;
   border: 0;
   border-radius: 21px;
-  grid-template-columns: 1.45fr 1fr;
-  gap: 4px;
   background: #f5e9ec;
 }
 
-.memory-main,
-.memory-side {
-  position: relative;
-  overflow: hidden;
-}
-
-.memory-main img,
-.memory-side img {
+.memory-carousel > img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: opacity .35s ease;
 }
 
-.memory-main::after {
+.memory-carousel::after {
   position: absolute;
-  inset: 45% 0 0;
+  inset: 38% 0 0;
   content: "";
   background: linear-gradient(transparent, rgba(49, 27, 35, .58));
 }
 
-.memory-main span {
+.memory-carousel-overlay {
   position: absolute;
   bottom: 18px;
   left: 17px;
+  right: 17px;
   z-index: 2;
   color: #fff;
-  font-family: "Noto Serif SC", "Songti SC", serif;
-  font-size: 15px;
-  line-height: 1.65;
   text-align: left;
   text-shadow: 0 2px 12px rgba(0, 0, 0, .25);
 }
-
-.memory-side {
-  display: grid;
-  grid-template-rows: 1.15fr .85fr;
-  gap: 4px;
-}
-
-.memory-note {
+.memory-carousel-overlay span { display:block; font-family:"Noto Serif SC", "Songti SC", serif; font-size:15px; line-height:1.55; }
+.memory-carousel-overlay small { display:block; margin-top:5px; font-size:9px; opacity:.82; }
+.memory-dots {
+  position:absolute;
+  right:15px;
+  top:15px;
+  z-index:2;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #8c6672;
-  background: #fbedf1;
-  flex-direction: column;
+  gap:4px;
 }
-
-.memory-note > span {
-  margin-bottom: 5px;
-  color: #df6e91;
-  font-size: 15px;
-}
-
-.memory-note strong {
-  font-family: "Noto Serif SC", "Songti SC", serif;
-  font-size: 12px;
-}
-
-.memory-note small {
-  margin-top: 3px;
-  font-size: 8px;
-  opacity: .65;
-}
+.memory-dots i { width:5px; height:5px; border-radius:99px; background:rgba(255,255,255,.55); transition:.25s; }
+.memory-dots i.active { width:15px; background:#fff; }
 
 .today-feature {
   display: flex;

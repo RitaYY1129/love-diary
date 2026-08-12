@@ -92,19 +92,12 @@
           <p class="text-sm text-gray-500">{{ quizQuestions[quizCurrentIndex]?.hint }}</p>
         </div>
         <div class="space-y-3">
-          <button 
-            v-for="(option, index) in quizQuestions[quizCurrentIndex]?.options" 
-            :key="index"
-            @click="answerQuiz(index)"
-            :class="['w-full p-4 rounded-xl text-left transition-all', quizSelectedAnswer === index ? 'bg-primary text-white' : 'bg-gray-50']"
-            :disabled="quizAnswered"
-          >
-            <span class="font-medium">{{ option }}</span>
-          </button>
+          <input v-model.trim="quizAnswerText" class="form-input" placeholder="输入你的回答" :disabled="quizAnswered" @keyup.enter="answerQuiz">
+          <button class="btn btn-primary btn-block" :disabled="quizAnswered || !quizAnswerText" @click="answerQuiz">提交回答</button>
         </div>
         <div v-if="quizAnswered" class="mt-4">
           <div :class="['p-3 rounded-lg text-center', quizIsCorrect ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600']">
-            {{ quizIsCorrect ? '🎉 回答正确！' : '😢 回答错误，正确答案是：' + quizQuestions[quizCurrentIndex]?.options[quizQuestions[quizCurrentIndex]?.answer] }}
+            {{ quizIsCorrect ? '🎉 回答正确！' : '😢 回答不一致，再多了解一下 TA 吧' }}
           </div>
           <button @click="nextQuiz" class="btn btn-primary btn-block mt-4">
             {{ quizCurrentIndex < quizQuestions.length - 1 ? '下一题' : '查看结果' }}
@@ -306,24 +299,8 @@
             <input v-model="formData.hint" type="text" class="form-input" placeholder="输入提示">
           </div>
           <div>
-            <label class="text-sm text-gray-600 mb-1 block">选项1</label>
-            <input v-model="formData.options[0]" type="text" class="form-input" placeholder="选项1">
-          </div>
-          <div>
-            <label class="text-sm text-gray-600 mb-1 block">选项2</label>
-            <input v-model="formData.options[1]" type="text" class="form-input" placeholder="选项2">
-          </div>
-          <div>
-            <label class="text-sm text-gray-600 mb-1 block">选项3</label>
-            <input v-model="formData.options[2]" type="text" class="form-input" placeholder="选项3">
-          </div>
-          <div>
-            <label class="text-sm text-gray-600 mb-1 block">选项4</label>
-            <input v-model="formData.options[3]" type="text" class="form-input" placeholder="选项4">
-          </div>
-          <div>
-            <label class="text-sm text-gray-600 mb-1 block">正确答案索引 (0-3)</label>
-            <input v-model.number="formData.answer" type="number" min="0" max="3" class="form-input">
+            <label class="text-sm text-gray-600 mb-1 block">参考答案</label>
+            <input v-model="formData.answerText" type="text" class="form-input" placeholder="输入期望回答">
           </div>
         </div>
 
@@ -563,16 +540,17 @@ const getDefaultItems = (type) => {
 const quizQuestions = ref([]);
 const quizCurrentIndex = ref(0);
 const quizScore = ref(0);
-const quizSelectedAnswer = ref(-1);
+const quizAnswerText = ref('');
 const quizAnswered = ref(false);
 const quizIsCorrect = ref(false);
 const showQuizResult = ref(false);
-const answerQuiz = (index) => {
+const answerQuiz = () => {
  if (quizAnswered.value)
  return;
- quizSelectedAnswer.value = index;
  quizAnswered.value = true;
- quizIsCorrect.value = index === quizQuestions.value[quizCurrentIndex.value].answer;
+ const question = quizQuestions.value[quizCurrentIndex.value];
+ const expected = question.answerText || question.options?.[question.answer] || '';
+ quizIsCorrect.value = quizAnswerText.value.trim().toLocaleLowerCase() === expected.trim().toLocaleLowerCase();
  if (quizIsCorrect.value) {
  quizScore.value += 20;
  }
@@ -580,7 +558,7 @@ const answerQuiz = (index) => {
 const nextQuiz = () => {
  if (quizCurrentIndex.value < quizQuestions.value.length - 1) {
  quizCurrentIndex.value++;
- quizSelectedAnswer.value = -1;
+ quizAnswerText.value = '';
  quizAnswered.value = false;
  }
  else {
@@ -623,8 +601,9 @@ const quizResultDesc = computed(() => {
 const resetQuiz = () => {
  quizCurrentIndex.value = 0;
  quizScore.value = 0;
- quizSelectedAnswer.value = -1;
+ quizAnswerText.value = '';
  quizAnswered.value = false;
+ quizIsCorrect.value = false;
  showQuizResult.value = false;
 };
 const truthCards = ref([]);
@@ -838,7 +817,7 @@ const getItemDesc = (item) => {
 const addNewItem = () => {
  editingIndex.value = -1;
  formData.value = {
- options: ['', '', '', '']
+ answerText: ''
  };
  showModal.value = true;
 };
@@ -846,9 +825,7 @@ const editItem = (index) => {
  editingIndex.value = index;
  const item = adminItems.value[index];
  formData.value = { ...item };
- if (!formData.value.options) {
- formData.value.options = ['', '', '', ''];
- }
+ if (!formData.value.answerText) formData.value.answerText = formData.value.options?.[formData.value.answer] || '';
  showModal.value = true;
 };
 const deleteItem = (index) => {
