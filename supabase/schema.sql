@@ -50,6 +50,12 @@ returns text language sql stable security definer set search_path = public as $$
   select coalesce((select couple_id from public.profiles where id = auth.uid()), auth.uid()::text)
 $$;
 
+drop policy if exists "read own profile" on public.profiles;
+drop policy if exists "update own profile" on public.profiles;
+drop policy if exists "read couple state" on public.couple_shared_states;
+drop policy if exists "write couple state" on public.couple_shared_states;
+drop policy if exists "update couple state" on public.couple_shared_states;
+
 create policy "read own profile" on public.profiles for select using (id = auth.uid());
 create policy "update own profile" on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
 create policy "read couple state" on public.couple_shared_states for select using (couple_id = public.current_couple_id());
