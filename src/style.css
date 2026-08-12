@@ -393,7 +393,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .card .text-gray-400 { color: #b89fa5 !important; }
 .card .text-gray-500 { color: var(--ink-500) !important; }
 
-.btn { 
+.btn {
   min-height: 44px;
   border-radius: 12px;
   font-weight: 600;
