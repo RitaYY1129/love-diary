@@ -11,6 +11,16 @@ const run = async () => {
   });
 
   try {
+    const addColumnIfMissing = async (name, definition) => {
+      const [columns] = await connection.execute(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = ?`,
+        [process.env.DB_NAME, name]
+      );
+      if (columns.length === 0) await connection.execute(`ALTER TABLE users ADD COLUMN ${definition}`);
+    };
+    await addColumnIfMissing('username', 'username VARCHAR(50) UNIQUE NULL AFTER id');
+    await addColumnIfMissing('email', 'email VARCHAR(254) UNIQUE NULL AFTER username');
     await connection.execute('ALTER TABLE users MODIFY phone VARCHAR(20) NULL');
     await connection.execute('ALTER TABLE users MODIFY password_hash VARCHAR(255) NULL');
     const [inviteColumns] = await connection.execute(

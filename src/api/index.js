@@ -35,29 +35,10 @@ axiosInstance.interceptors.response.use(
 )
 
 export const AuthAPI = {
-  login: async (phone, password) => {
-    return await axiosInstance.post('/auth/login', { phone, password })
-  },
+  login: async (identifier, password) => await axiosInstance.post('/auth/login', { identifier, password }),
 
-  sendCode: async (phone, purpose = 'login') => {
-    if (!/^1[3-9]\d{9}$/.test(phone)) {
-      throw new Error('请输入正确的11位手机号')
-    }
-    return await axiosInstance.post('/auth/sms/send', { phone, purpose })
-  },
-
-  loginByCode: async (phone, code) => {
-    return await axiosInstance.post('/auth/sms/login', { phone, code })
-  },
-
-  register: async (phone, code, nickname, password) => {
-    return await axiosInstance.post('/auth/sms/register', {
-      phone,
-      code,
-      nickname,
-      password
-    })
-  },
+  register: async (username, identifier, password) =>
+    await axiosInstance.post('/auth/register', { username, identifier, password }),
 
   loginByWechat: async (code) => {
     return await axiosInstance.post('/auth/wechat', { code })

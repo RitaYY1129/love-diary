@@ -9,7 +9,7 @@ const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await query('SELECT id, phone, nickname, avatar, invite_code, partner_id FROM users WHERE id = ?', [decoded.userId]);
+    const user = await query('SELECT id, username, email, phone, nickname, avatar, invite_code, partner_id FROM users WHERE id = ?', [decoded.userId]);
     
     if (!user || user.length === 0) {
       return res.status(401).json({ message: '用户不存在' });

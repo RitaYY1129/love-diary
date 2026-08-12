@@ -25,67 +25,30 @@
 
         <form @submit.prevent="handleSubmit">
           <div class="space-y-4">
+            <div v-if="mode === 'register'">
+              <label class="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+              <input 
+                v-model="form.username"
+                type="text"
+                autocomplete="username"
+                class="form-input" 
+                placeholder="请输入用户名"
+                maxlength="50"
+              />
+            </div>
+
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">手机号</label>
+              <label class="block text-sm font-medium text-gray-700 mb-2">用户名 / 邮箱 / 手机号</label>
               <input 
-                v-model="form.phone" 
-                type="tel" 
-                inputmode="numeric"
-                autocomplete="tel"
+                v-model="form.identifier"
+                type="text"
+                autocomplete="username"
                 class="form-input" 
-                placeholder="请输入手机号"
-                maxlength="11"
+                placeholder="请输入用户名、邮箱或手机号"
               />
             </div>
 
-            <div v-if="mode === 'login' && !loginWithCode">
-              <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
-              <input 
-                v-model="form.password" 
-                type="password" 
-                class="form-input" 
-                placeholder="请输入密码"
-              />
-            </div>
-
-            <div v-else>
-              <div class="flex gap-2">
-                <div class="flex-1">
-                  <label class="block text-sm font-medium text-gray-700 mb-2">验证码</label>
-                  <input 
-                    v-model="form.code" 
-                    type="text" 
-                    inputmode="numeric"
-                    autocomplete="one-time-code"
-                    class="form-input" 
-                    placeholder="请输入验证码"
-                    maxlength="6"
-                  />
-                </div>
-                <div class="flex items-end">
-                  <button 
-                    type="button" 
-                    @click="sendCode"
-                    :disabled="codeButtonDisabled"
-                    class="btn btn-outline h-[44px] px-4"
-                  >
-                    {{ codeButtonText }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="mode === 'register'">
-              <label class="block text-sm font-medium text-gray-700 mb-2">昵称</label>
-              <input 
-                v-model="form.nickname" 
-                type="text" 
-                class="form-input" 
-                placeholder="请输入昵称"
-              />
-            </div>
-
-            <div v-if="mode === 'register'">
+            <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
               <input 
                 v-model="form.password" 
@@ -100,9 +63,6 @@
                 <input type="checkbox" v-model="rememberMe" />
                 <span class="text-gray-600">记住我</span>
               </label>
-              <button type="button" @click="loginWithCode = !loginWithCode" class="text-primary">
-                {{ loginWithCode ? '使用密码登录' : '使用验证码登录' }}
-              </button>
             </div>
           </div>
 
@@ -167,7 +127,6 @@ onMounted(() => {
 })
 
 const mode = ref('login')
-const loginWithCode = ref(true)
 const rememberMe = ref(false)
 const showPartnerBind = ref(false)
 const partnerCode = ref('')
@@ -175,15 +134,10 @@ const isSubmitting = ref(false)
 const agreedToTerms = ref(false)
 
 const form = ref({
-  phone: '',
+  username: '',
+  identifier: '',
   password: '',
-  code: '',
-  nickname: ''
 })
-
-const codeButtonText = ref('获取验证码')
-const codeButtonDisabled = ref(false)
-let codeTimer = null
 
 const toast = ref({
   show: false,
@@ -197,86 +151,38 @@ const showToast = (message, duration = 2000) => {
   }, duration)
 }
 
-const isValidPhone = (phone) => /^1[3-9]\d{9}$/.test(phone)
-
-const sendCode = async () => {
-  if (!isValidPhone(form.value.phone)) {
-    showToast('请输入正确的11位手机号')
-    return
-  }
-  
-  codeButtonDisabled.value = true
-  codeButtonText.value = '60s'
-  
-  const result = await authStore.sendCode(form.value.phone, mode.value)
-  if (!result.ok) {
-    showToast(result.message)
-    codeButtonDisabled.value = false
-    codeButtonText.value = '获取验证码'
-    return
-  }
-
-  showToast(result.message, 6000)
-  
-  let count = 60
-  codeTimer = setInterval(() => {
-    count--
-    if (count <= 0) {
-      clearInterval(codeTimer)
-      codeButtonDisabled.value = false
-      codeButtonText.value = '获取验证码'
-    } else {
-      codeButtonText.value = `${count}s`
-    }
-  }, 1000)
-}
-
 const handleSubmit = async () => {
   if (!agreedToTerms.value) {
     showToast('请先阅读并同意用户协议和隐私政策')
     return
   }
 
-  if (!isValidPhone(form.value.phone)) {
-    showToast('请输入正确的11位手机号')
+  if (!form.value.identifier.trim()) {
+    showToast('请输入用户名、邮箱或手机号')
     return
   }
   
   if (mode.value === 'register') {
-    if (!form.value.nickname) {
-      showToast('请输入昵称')
+    if (!form.value.username.trim()) {
+      showToast('请输入用户名')
       return
     }
     if (!form.value.password) {
       showToast('请输入密码')
       return
     }
-    if (!form.value.code) {
-      showToast('请输入验证码')
-      return
-    }
-  } else {
-    if (loginWithCode.value && !form.value.code) {
-      showToast('请输入验证码')
-      return
-    }
-    if (!loginWithCode.value && !form.value.password) {
-      showToast('请输入密码')
-      return
-    }
+  } else if (!form.value.password) {
+    showToast('请输入密码')
+    return
   }
   
   isSubmitting.value = true
   
   let result
   if (mode.value === 'login') {
-    if (loginWithCode.value) {
-      result = await authStore.loginByCode(form.value.phone, form.value.code)
-    } else {
-      result = await authStore.login(form.value.phone, form.value.password)
-    }
+    result = await authStore.login(form.value.identifier, form.value.password)
   } else {
-    result = await authStore.register(form.value.phone, form.value.code, form.value.nickname, form.value.password)
+    result = await authStore.register(form.value.username, form.value.identifier, form.value.password)
   }
   
   isSubmitting.value = false
@@ -325,6 +231,5 @@ const bindVirtualPartner = () => {
 }
 
 onBeforeUnmount(() => {
-  if (codeTimer) clearInterval(codeTimer)
 })
 </script>

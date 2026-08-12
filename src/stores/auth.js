@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { AuthAPI } from '@/api'
-import { requestWechatCode } from '@/native/wechat'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -18,9 +17,9 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
   }
 
-  const login = async (phone, password) => {
+  const login = async (identifier, password) => {
     try {
-      const response = await AuthAPI.login(phone, password)
+      const response = await AuthAPI.login(identifier, password)
       saveSession(response)
       return { ok: true, message: '登录成功' }
     } catch (error) {
@@ -28,19 +27,9 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const loginByCode = async (phone, code) => {
+  const register = async (username, identifier, password) => {
     try {
-      const response = await AuthAPI.loginByCode(phone, code)
-      saveSession(response)
-      return { ok: true, message: '验证码登录成功' }
-    } catch (error) {
-      return { ok: false, message: error.message || '登录失败' }
-    }
-  }
-
-  const register = async (phone, code, nickname, password) => {
-    try {
-      const response = await AuthAPI.register(phone, code, nickname, password)
+      const response = await AuthAPI.register(username, identifier, password)
       saveSession(response)
       return { ok: true, message: '注册成功' }
     } catch (error) {
@@ -48,30 +37,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const sendCode = async (phone, purpose = 'login') => {
-    try {
-      const response = await AuthAPI.sendCode(phone, purpose)
-      return {
-        ok: true,
-        message: response.devCode
-          ? `验证码：${response.devCode}，5分钟内有效`
-          : '验证码已发送'
-      }
-    } catch (error) {
-      return { ok: false, message: error.message || '发送失败' }
-    }
-  }
-
-  const loginByWechat = async () => {
-    try {
-      const code = await requestWechatCode()
-      const response = await AuthAPI.loginByWechat(code)
-      saveSession(response)
-      return { ok: true, message: '微信登录成功' }
-    } catch (error) {
-      return { ok: false, message: error.message || '微信登录失败' }
-    }
-  }
 
   const logout = () => {
     user.value = null
@@ -159,10 +124,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     isLoggedIn,
     login,
-    loginByCode,
     register,
-    sendCode,
-    loginByWechat,
     logout,
     loadUser,
     refreshProfile,

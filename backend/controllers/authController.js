@@ -23,36 +23,56 @@ const serializeUser = (user) => ({
   profile_data: parseProfileData(user.profile_data)
 });
 
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const isValidPhone = (value) => /^1[3-9]\d{9}$/.test(value);
+
+const publicUser = (user) => ({
+  id: user.id,
+  username: user.username || user.nickname,
+  email: user.email || null,
+  phone: user.phone || null,
+  nickname: user.nickname,
+  avatar: user.avatar || '',
+  profile_data: parseProfileData(user.profile_data),
+  partner_id: user.partner_id || null,
+  invite_code: user.invite_code
+});
+
 const register = async (req, res) => {
   try {
-    const { phone, nickname, password } = req.body;
+    const username = String(req.body.username || '').trim();
+    const identifier = String(req.body.identifier || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
-    if (!phone || !nickname || !password) {
-      return res.status(400).json({ message: '请填写完整信息' });
+    if (!username || username.length > 50 || !identifier || password.length < 6) {
+      return res.status(400).json({ message: '请填写用户名、邮箱或手机号，以及至少 6 位密码' });
+    }
+    if (!isValidEmail(identifier) && !isValidPhone(identifier)) {
+      return res.status(400).json({ message: '请输入正确的邮箱地址或中国大陆手机号' });
     }
 
-    const existingUser = await query('SELECT id FROM users WHERE phone = ?', [phone]);
+    const phone = isValidPhone(identifier) ? identifier : null;
+    const email = isValidEmail(identifier) ? identifier : null;
+    const existingUser = await query(
+      'SELECT id FROM users WHERE username = ? OR email = ? OR phone = ?',
+      [username, email, phone]
+    );
     if (existingUser.length > 0) {
-      return res.status(400).json({ message: '该手机号已被注册' });
+      return res.status(409).json({ message: '用户名、邮箱或手机号已被注册' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const inviteCode = `LOVE${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const result = await query(
-      'INSERT INTO users (phone, nickname, password_hash, invite_code) VALUES (?, ?, ?, ?)',
-      [phone, nickname, passwordHash, inviteCode]
+      'INSERT INTO users (username, email, phone, nickname, password_hash, invite_code) VALUES (?, ?, ?, ?, ?, ?)',
+      [username, email, phone, username, passwordHash, inviteCode]
     );
 
     const token = generateToken(result.insertId);
     return res.status(201).json({
       message: '注册成功',
       token,
-      user: {
-        id: result.insertId,
-        phone,
-        nickname,
-        invite_code: inviteCode
-      }
+      user: publicUser({ id: result.insertId, username, email, phone, nickname: username, invite_code: inviteCode })
     });
   } catch (error) {
     return res.status(500).json({ message: '服务器错误', error: error.message });
@@ -61,39 +81,32 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { phone, password } = req.body;
+    const identifier = String(req.body.identifier || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
-    if (!phone || !password) {
+    if (!identifier || !password) {
       return res.status(400).json({ message: '请填写完整信息' });
     }
 
-    const user = await query('SELECT * FROM users WHERE phone = ?', [phone]);
+    const user = await query('SELECT * FROM users WHERE username = ? OR email = ? OR phone = ?', [identifier, identifier, identifier]);
     if (!user || user.length === 0) {
-      return res.status(401).json({ message: '手机号或密码错误' });
+      return res.status(401).json({ message: '用户名、邮箱、手机号或密码错误' });
     }
 
     if (!user[0].password_hash) {
-      return res.status(401).json({ message: '该账号未设置密码，请使用验证码或微信登录' });
+      return res.status(401).json({ message: '该账号未设置密码，请重新注册一个密码账号' });
     }
 
     const validPassword = await bcrypt.compare(password, user[0].password_hash);
     if (!validPassword) {
-      return res.status(401).json({ message: '手机号或密码错误' });
+      return res.status(401).json({ message: '用户名、邮箱、手机号或密码错误' });
     }
 
     const token = generateToken(user[0].id);
     return res.json({
       message: '登录成功',
       token,
-      user: {
-        id: user[0].id,
-        phone: user[0].phone,
-        nickname: user[0].nickname,
-        avatar: user[0].avatar,
-        profile_data: parseProfileData(user[0].profile_data),
-        partner_id: user[0].partner_id,
-        invite_code: user[0].invite_code
-      }
+      user: publicUser(user[0])
     });
   } catch (error) {
     return res.status(500).json({ message: '服务器错误', error: error.message });
@@ -102,7 +115,7 @@ const login = async (req, res) => {
 
 const getProfile = async (req, res) => {
   try {
-    const user = await query('SELECT id, phone, nickname, avatar, profile_data, invite_code, partner_id, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = await query('SELECT id, username, email, phone, nickname, avatar, profile_data, invite_code, partner_id, created_at FROM users WHERE id = ?', [req.user.id]);
     
     if (!user || user.length === 0) {
       return res.status(404).json({ message: '用户不存在' });
@@ -174,7 +187,7 @@ const updateProfile = async (req, res) => {
     await query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
 
     const user = await query(
-      'SELECT id, phone, nickname, avatar, profile_data, invite_code, partner_id, created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, phone, nickname, avatar, profile_data, invite_code, partner_id, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
     return res.json({ message: '个人资料已保存', user: serializeUser(user[0]) });

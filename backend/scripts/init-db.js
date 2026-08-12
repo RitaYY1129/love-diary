@@ -25,6 +25,8 @@ const initDatabase = async () => {
     const createTables = [
       `CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NULL,
+        email VARCHAR(254) UNIQUE NULL,
         phone VARCHAR(20) UNIQUE NULL,
         nickname VARCHAR(50) NOT NULL,
         avatar MEDIUMTEXT,
