@@ -52,7 +52,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-2">邮箱验证码</label>
               <div class="flex gap-2">
                 <input v-model="form.emailCode" type="text" inputmode="numeric" autocomplete="one-time-code" class="form-input flex-1" placeholder="请输入邮箱中的验证码" maxlength="8" />
-                <button type="button" class="btn btn-outline shrink-0" :disabled="codeSending || codeCooldown > 0" @click="sendEmailCode">
+                <button type="button" class="btn btn-outline shrink-0 min-w-[112px]" :disabled="codeSending || codeCooldown > 0" @click="sendEmailCode">
                   {{ codeCooldown > 0 ? `${codeCooldown}s` : '发送验证码' }}
                 </button>
               </div>
@@ -62,7 +62,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-2">密码</label>
               <div class="relative">
                 <input v-model="form.password" :type="showPassword ? 'text' : 'password'" class="form-input pr-16" placeholder="请输入至少 6 位密码" />
-                <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-primary" @click="showPassword = !showPassword">{{ showPassword ? '隐藏' : '显示' }}</button>
+                <button type="button" class="absolute right-1 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[56px] px-3 text-sm text-primary" @click="showPassword = !showPassword">{{ showPassword ? '隐藏' : '显示' }}</button>
               </div>
             </div>
 
@@ -89,7 +89,7 @@
         </label>
 
         <div class="mt-6 text-center">
-          <button @click="showPartnerBind = true" class="text-primary text-sm">
+          <button @click="showPartnerBind = true" class="min-h-[44px] px-4 text-primary text-sm">
             绑定另一半
           </button>
         </div>

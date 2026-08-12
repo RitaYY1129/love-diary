@@ -393,8 +393,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .card .text-gray-400 { color: #b89fa5 !important; }
 .card .text-gray-500 { color: var(--ink-500) !important; }
 
-.btn {
-  min-height: 40px;
+.btn { 
+  min-height: 44px;
   border-radius: 12px;
   font-weight: 600;
   letter-spacing: .01em;
@@ -411,7 +411,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .btn-secondary { color: var(--ink-700); background: #f7f1f1; }
 .btn-outline { color: var(--love-600); background: #fff; border-color: var(--love-200); }
 .btn-danger { background: #fff0f1; color: #c84e61; }
-.btn-sm { min-height: 34px; padding: 7px 13px; font-size: 11px; }
+.btn-sm { min-height: 44px; padding: 9px 14px; font-size: 12px; }
 
 .text-primary { color: var(--love-600) !important; }
 .bg-primary { background-color: var(--love-500) !important; }
@@ -681,6 +681,37 @@ input:checked + .slider { background:linear-gradient(115deg,var(--love-500),var(
   .card { padding: 16px; border-radius: 16px; }
   .tab-item { padding-left: 8px; padding-right: 8px; }
   .page-content .grid.grid-cols-4 { gap: 7px; }
+}
+
+/* 手机触控优化：所有可操作控件至少保留 44px 的触控面积。 */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"] {
+    touch-action: manipulation;
+  }
+  button:not(.tab-item):not(.btn-back),
+  [role="button"] {
+    min-height: 44px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 22px;
+    height: 22px;
+  }
+  .card-actions button,
+  .page-content button.text-xs,
+  .page-content button.text-sm {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 14px;
+  }
+  #app > .min-h-screen.bg-gradient-to-br .flex.justify-center.gap-4 > button {
+    min-width: 132px;
+    min-height: 52px;
+    font-size: 17px;
+  }
 }
 
 /* 统一旧页面底部导航：同一组线性图标与文字 */
