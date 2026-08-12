@@ -115,23 +115,6 @@
           </button>
         </form>
 
-        <div v-if="mode === 'login'" class="flex items-center gap-3 my-5">
-          <span class="h-px flex-1 bg-gray-200"></span>
-          <span class="text-xs text-gray-400">其他登录方式</span>
-          <span class="h-px flex-1 bg-gray-200"></span>
-        </div>
-
-        <button
-          v-if="mode === 'login'"
-          type="button"
-          class="btn btn-block text-white bg-[#07c160] hover:bg-[#06ad56]"
-          :disabled="isSubmitting"
-          @click="handleWechatLogin"
-        >
-          <span class="mr-2 text-lg">微信</span>
-          微信一键登录
-        </button>
-
         <label class="mt-4 flex items-start justify-center gap-2 text-xs text-gray-500">
           <input v-model="agreedToTerms" type="checkbox" class="mt-0.5" />
           <span>我已阅读并同意《用户协议》和《隐私政策》</span>
@@ -338,23 +321,6 @@ const bindVirtualPartner = () => {
     localStorage.setItem('loveDiary_partner', JSON.stringify(virtualPartner))
     showToast('虚拟情人绑定成功')
     showPartnerBind.value = false
-  }
-}
-
-const handleWechatLogin = async () => {
-  if (!agreedToTerms.value) {
-    showToast('请先阅读并同意用户协议和隐私政策')
-    return
-  }
-
-  isSubmitting.value = true
-  const result = await authStore.loginByWechat()
-  isSubmitting.value = false
-
-  if (result.ok) {
-    await router.replace('/home')
-  } else {
-    showToast(result.message, 3500)
   }
 }
 
