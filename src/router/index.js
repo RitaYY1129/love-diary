@@ -133,8 +133,12 @@ const routes = [
   }
 ]
 
+// iOS added-to-home-screen mode can lose GitHub Pages history routes when it
+// launches outside Safari. Hash routing keeps every navigation inside index.html.
+const isIosStandalone = window.navigator.standalone === true
+
 const router = createRouter({
-  history: import.meta.env.VITE_NATIVE_APP === 'true'
+  history: import.meta.env.VITE_NATIVE_APP === 'true' || isIosStandalone
     ? createWebHashHistory()
     : createWebHistory(import.meta.env.BASE_URL),
   routes

@@ -13,7 +13,15 @@ app.use(router)
 
 app.mount('#app')
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+const isIosStandalone = window.navigator.standalone === true
+
+// GitHub Pages already serves this app online. On iOS standalone mode, stale
+// service-worker HTML can reference removed hashed bundles and produce a blank app.
+if (isIosStandalone && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(registration => registration.unregister())
+  })
+} else if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(error => {
       console.warn('Service worker registration failed:', error)
