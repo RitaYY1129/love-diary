@@ -16,7 +16,8 @@ function copyPwaIcons() {
 }
 
 export default defineConfig({
-  base: '/love-diary/',
+  // GitHub Pages uses /love-diary/; set VITE_APP_BASE=/ on Cloudflare Pages.
+  base: process.env.VITE_APP_BASE || '/love-diary/',
   plugins: [vue(), copyPwaIcons()],
   resolve: {
     alias: {
