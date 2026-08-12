@@ -84,6 +84,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await AuthAPI.bindPartner(partnerCode)
       if (user.value) {
         user.value.partner = response.partner
+        await refreshProfile()
         localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
       }
       return { ok: true, message: '绑定成功' }

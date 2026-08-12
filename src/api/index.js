@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { supabaseAuth, supabaseRest } from './supabase'
 
 // 开发环境使用同源代理，避免手机访问局域网地址时把 localhost 解析成手机自身。
 // Android/生产构建仍由 VITE_API_BASE 指向正式 HTTPS 后端。
@@ -35,17 +36,29 @@ axiosInstance.interceptors.response.use(
 )
 
 export const AuthAPI = {
-  login: async (identifier, password) => await axiosInstance.post('/auth/login', { identifier, password }),
+  login: async (identifier, password) => {
+    const session = await supabaseAuth.signIn(identifier, password)
+    const user = await supabaseAuth.getUser(session.access_token)
+    const profiles = await supabaseRest.get(`profiles?id=eq.${user.id}&select=*`, session.access_token)
+    return { token: session.access_token, user: profiles[0] || user }
+  },
 
-  register: async (username, identifier, password) =>
-    await axiosInstance.post('/auth/register', { username, identifier, password }),
+  register: async (username, identifier, password) => {
+    const session = await supabaseAuth.signUp({ username, identifier, password })
+    const user = await supabaseAuth.getUser(session.access_token)
+    const profiles = await supabaseRest.get(`profiles?id=eq.${user.id}&select=*`, session.access_token)
+    return { token: session.access_token, user: profiles[0] || user }
+  },
 
   loginByWechat: async (code) => {
     return await axiosInstance.post('/auth/wechat', { code })
   },
 
   getProfile: async () => {
-    return await axiosInstance.get('/auth/profile')
+    const token = localStorage.getItem('loveDiary_token')
+    const user = await supabaseAuth.getUser(token)
+    const profiles = await supabaseRest.get(`profiles?id=eq.${user.id}&select=*`, token)
+    return { user: profiles[0] || user }
   },
 
   updateProfile: async (data) => {
@@ -53,7 +66,9 @@ export const AuthAPI = {
   },
 
   bindPartner: async (partnerCode) => {
-    return await axiosInstance.post('/auth/partner/bind', { partnerCode })
+    const token = localStorage.getItem('loveDiary_token')
+    const data = await supabaseRest.post('rpc/bind_partner', { partner_code: partnerCode }, token)
+    return { partner: data }
   },
 
   unbindPartner: async () => {
@@ -226,8 +241,21 @@ export const CallAPI = {
 }
 
 export const SharingAPI = {
-  getPreferences: async () => await axiosInstance.get('/sharing/preferences'),
-  updatePreferences: async preferences => await axiosInstance.put('/sharing/preferences', preferences),
-  getState: async module => await axiosInstance.get(`/sharing/state/${module}`),
-  putState: async (module, payload) => await axiosInstance.put(`/sharing/state/${module}`, { payload })
+  getPreferences: async () => ({ preferences: {} }),
+  updatePreferences: async preferences => ({ preferences }),
+  getState: async module => {
+    const token = localStorage.getItem('loveDiary_token')
+    const profile = await AuthAPI.getProfile()
+    const coupleId = profile.user.couple_id || profile.user.id
+    const rows = await supabaseRest.get(`couple_shared_states?couple_id=eq.${encodeURIComponent(coupleId)}&module_key=eq.${encodeURIComponent(module)}&select=payload`, token)
+    return { payload: rows[0]?.payload ?? null }
+  },
+  putState: async (module, payload) => {
+    const token = localStorage.getItem('loveDiary_token')
+    const profile = await AuthAPI.getProfile()
+    const coupleId = profile.user.couple_id || profile.user.id
+    return supabaseRest.post('couple_shared_states?on_conflict=couple_id,module_key', {
+      couple_id: coupleId, module_key: module, payload, updated_by: profile.user.id
+    }, token, { Prefer: 'resolution=merge-duplicates,return=representation' })
+  }
 }

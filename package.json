@@ -10,7 +10,8 @@
     "build:android": "vite build --mode android --base ./ && cap sync android",
     "android:open": "cap open android",
     "android:sync": "npm run build:android",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase:schema": "echo Run supabase/schema.sql in the Supabase SQL Editor"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",
