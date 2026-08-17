@@ -1,3 +1,10 @@
+// ============================================================================
+//  Supabase 云后端适配层（手写 fetch，无需额外依赖；账号存于 profiles 表）
+//  身份方案 A：手机号/用户名 + bcrypt 密码哈希，直接存 profiles 表，不走 Supabase Auth。
+//  所有功能（账号/情侣绑定/聊天/日记/共享状态...）统一走云端，手机/网页直接可用。
+// ============================================================================
+import bcrypt from 'bcryptjs'
+
 const url = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '')
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
@@ -23,72 +30,167 @@ const request = async (path, options = {}, accessToken = null) => {
   return data
 }
 
-const normalizeUsername = value => String(value || '').trim().toLowerCase()
-const isPhone = value => /^1[3-9]\d{9}$/.test(value)
-const isEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-const toHex = value => Array.from(new TextEncoder().encode(value), byte => byte.toString(16).padStart(2, '0')).join('')
+// ---- 身份标识归一化 ----
+const normalize = (v) => String(v || '').trim().toLowerCase()
+const isPhone = (v) => /^1[3-9]\d{9}$/.test(v)
 
-// Supabase Auth uses email + password. Phone numbers and usernames are mapped to
-// deterministic internal addresses, so neither needs an SMS service or public email.
-export const authEmailFor = (identifier, username = '') => {
-  const value = String(identifier || '').trim().toLowerCase()
-  if (isEmail(value)) return value
-  if (isPhone(value)) return `phone-${value}@love-diary.local`
-  const name = normalizeUsername(username || value)
-  if (!name) throw new Error('请输入用户名、邮箱或手机号')
-  return `user-${toHex(name)}@love-diary.local`
+// 本地生成 token（自签 JWT 风格，仅用于前端会话标识，云端不校验）
+function makeToken(userId) {
+  return 'ld_' + userId + '_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-export const supabaseAuth = {
-  async signUp({ username, identifier, password }) {
-    const email = authEmailFor(identifier, username)
-    const data = await request('/auth/v1/signup', {
-      method: 'POST',
-      body: JSON.stringify({
-        email,
-        password,
-        data: { username: normalizeUsername(username), identifier: String(identifier).trim() }
-      })
-    })
-    if (!data.access_token) throw new Error('注册成功，但需要在 Supabase 中关闭“Confirm email”后才能直接登录。')
-    return data
-  },
-  signIn(identifier, password) {
-    return request('/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      body: JSON.stringify({ email: authEmailFor(identifier), password })
-    })
-  },
-  sendEmailCode(email) {
-    return request('/auth/v1/otp', {
-      method: 'POST',
-      body: JSON.stringify({ email, should_create_user: true })
-    })
-  },
-  verifyEmailCode(email, token) {
-    return request('/auth/v1/verify', {
-      method: 'POST',
-      body: JSON.stringify({ email, token, type: 'email' })
-    })
-  },
-  updateUser(accessToken, data) {
-    return request('/auth/v1/user', { method: 'PUT', body: JSON.stringify(data) }, accessToken)
-  },
-  getUser(accessToken) {
-    return request('/auth/v1/user', {}, accessToken)
+function mapProfile(p) {
+  if (!p) return null
+  return {
+    id: p.id,
+    nickname: p.nickname || p.identifier,
+    identifier: p.identifier,
+    avatar: p.avatar || '',
+    bio: p.bio || '',
+    birthday: p.birthday || '',
+    theme: p.theme || 'default',
+    username: p.username || '',
+    profile_data: p.profile_data || null,
+    invite_code: p.invite_code || '',
+    couple_id: p.couple_id || null,
+    partner: p.partner || null
   }
 }
 
+// 附带 partner 信息
+async function withPartner(p) {
+  const u = mapProfile(p)
+  if (u && u.couple_id) {
+    const partners = await request(`/rest/v1/profiles?select=*&couple_id=eq.${u.couple_id}&id=neq.${u.id}`)
+    const pr = Array.isArray(partners) ? partners[0] : null
+    if (pr) {
+      u.partner = mapProfile(pr)
+      u.partner.couple_id = u.couple_id
+    }
+  }
+  return u
+}
+
+export const supabaseAuth = {
+  // 注册：插入 profiles（自动生成邀请码）
+  async signUp({ username, identifier, password }) {
+    const idVal = normalize(identifier)
+    const nick = username || idVal
+    const code = 'LOVE' + Math.random().toString(36).slice(2, 10).toUpperCase()
+    const password_hash = await bcrypt.hash(password, 10)
+    const existing = await request(`/rest/v1/profiles?select=id&identifier=eq.${encodeURIComponent(idVal)}`)
+    if (Array.isArray(existing) && existing.length) {
+      return { ok: false, message: '该手机号/用户名已被注册' }
+    }
+    const data = await request('/rest/v1/profiles?select=*', {
+      method: 'POST',
+      body: JSON.stringify([{ id: crypto.randomUUID(), username: nick, identifier: idVal, nickname: nick, invite_code: code, password_hash }])
+    }, anonKey)
+    const p = Array.isArray(data) ? data[0] : data
+    const user = mapProfile(p)
+    return { ok: true, token: makeToken(user.id), user, message: '注册成功，请登录' }
+  },
+
+  // 登录：查 profiles 比对密码哈希
+  async signIn(identifier, password) {
+    const idVal = normalize(identifier)
+    try {
+      const rows = await request(`/rest/v1/profiles?select=*&identifier=eq.${encodeURIComponent(idVal)}`)
+      const p = Array.isArray(rows) ? rows[0] : null
+      if (!p) return { ok: false, message: '账号不存在，请先注册' }
+      if (!p.password_hash) return { ok: false, message: '该账号未设置密码，请使用注册或重置' }
+      const ok = await bcrypt.compare(password, p.password_hash)
+      if (!ok) return { ok: false, message: '手机号或密码错误' }
+      const user = await withPartner(p)
+      return { ok: true, token: makeToken(user.id), user }
+    } catch (e) {
+      return { ok: false, message: e.message || '登录失败' }
+    }
+  },
+
+  async signInWithWechat() {
+    return { ok: false, message: '微信登录暂未配置' }
+  },
+
+  async getProfile() {
+    const raw = localStorage.getItem('loveDiary_user')
+    if (!raw) return { ok: false, message: '未登录' }
+    const local = JSON.parse(raw)
+    const rows = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`)
+    const p = Array.isArray(rows) ? rows[0] : null
+    if (!p) return { ok: false, message: '账号不存在' }
+    const user = await withPartner(p)
+    return { ok: true, token: local.id ? makeToken(user.id) : '', user }
+  },
+
+  async updateProfile(payload) {
+    const raw = localStorage.getItem('loveDiary_user')
+    if (!raw) return { ok: false, message: '未登录' }
+    const local = JSON.parse(raw)
+    const data = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      headers: { Prefer: 'return=representation' }
+    })
+    const p = Array.isArray(data) ? data[0] : data
+    const user = await withPartner(p)
+    return { ok: true, user }
+  },
+
+  async bindPartner(inviteCode) {
+    const raw = localStorage.getItem('loveDiary_user')
+    if (!raw) return { ok: false, message: '未登录' }
+    const local = JSON.parse(raw)
+    const rows = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`)
+    const me = Array.isArray(rows) ? rows[0] : null
+    if (!me) return { ok: false, message: '账号不存在' }
+    if (me.couple_id) return { ok: false, message: '你已经绑定了情侣' }
+    const partners = await request(`/rest/v1/profiles?select=*&invite_code=eq.${encodeURIComponent(String(inviteCode).trim())}`)
+    const partner = Array.isArray(partners) ? partners[0] : null
+    if (!partner) return { ok: false, message: '邀请码无效' }
+    if (partner.couple_id) return { ok: false, message: '对方已经绑定了其他人' }
+    const coupleId = crypto.randomUUID()
+    // 批量更新两人到同一情侣组
+    await request(`/rest/v1/profiles?select=id&id=in.(${me.id},${partner.id})`, {
+      method: 'PATCH',
+      body: JSON.stringify({ couple_id: coupleId }),
+      headers: { Prefer: 'return=minimal' }
+    })
+    return this.getProfile()
+  },
+
+  async unbindPartner() {
+    const raw = localStorage.getItem('loveDiary_user')
+    if (!raw) return { ok: false, message: '未登录' }
+    const local = JSON.parse(raw)
+    const rows = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`)
+    const me = Array.isArray(rows) ? rows[0] : null
+    if (!me || !me.couple_id) return { ok: false, message: '尚未绑定' }
+    await request(`/rest/v1/profiles?select=id&couple_id=eq.${me.couple_id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ couple_id: null }),
+      headers: { Prefer: 'return=minimal' }
+    })
+    return this.getProfile()
+  }
+}
+
+// ---- REST 数据访问（PostgREST 风格，anon 可读写 profiles 等业务表）----
 export const supabaseRest = {
   get(path, token) { return request(`/rest/v1/${path}`, {}, token) },
   post(path, body, token, headers = {}) {
     return request(`/rest/v1/${path}`, { method: 'POST', body: JSON.stringify(body), headers }, token)
-  }
-  ,patch(path, body, token) {
+  },
+  patch(path, body, token) {
     return request(`/rest/v1/${path}`, { method: 'PATCH', body: JSON.stringify(body), headers: { Prefer: 'return=representation' } }, token)
+  },
+  delete(path, token) {
+    return request(`/rest/v1/${path}`, { method: 'DELETE' }, token)
   }
 }
 
 export const supabaseFunctions = {
   registerPhone: (payload) => request('/functions/v1/register-phone', { method: 'POST', body: JSON.stringify(payload) })
 }
+
+export const supabase = { url, anonKey }

@@ -209,9 +209,15 @@ const handleSubmit = async () => {
       showToast('密码至少需要 6 位')
       return
     }
-  } else if (!form.value.password) {
-    showToast('请输入密码')
-    return
+  } else {
+    if (!form.value.password) {
+      showToast('请输入密码')
+      return
+    }
+    if (!isPhone.value && !isEmail.value) {
+      showToast('请输入正确的手机号或邮箱')
+      return
+    }
   }
   
   isSubmitting.value = true

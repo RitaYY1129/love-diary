@@ -1,168 +1,129 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
 import { AuthAPI } from '@/api'
 
-export const useAuthStore = defineStore('auth', () => {
-  const user = ref(null)
-  const token = ref(localStorage.getItem('loveDiary_token') || null)
+export const useAuthStore = defineStore('auth', {
+  state: () => ({
+    user: null,
+    token: null,
+    isAuthenticated: false,
+    loading: false
+  }),
 
-  const isLoggedIn = computed(() => {
-    return !!token.value && !!user.value
-  })
+  getters: {
+    currentUser: (state) => state.user,
+    partner: (state) => state.user?.partner || null,
+    isLoggedIn: (state) => state.isAuthenticated && !!state.token
+  },
 
-  const saveSession = (response) => {
-    token.value = response.token
-    user.value = response.user
-    localStorage.setItem('loveDiary_token', token.value)
-    localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
-  }
-
-  const login = async (identifier, password) => {
-    try {
-      const response = await AuthAPI.login(identifier, password)
-      saveSession(response)
-      return { ok: true, message: '登录成功' }
-    } catch (error) {
-      return { ok: false, message: error.message || '登录失败' }
-    }
-  }
-
-  const register = async (username, identifier, password) => {
-    try {
-      const response = await AuthAPI.register(username, identifier, password)
-      saveSession(response)
-      return { ok: true, message: '注册成功' }
-    } catch (error) {
-      return { ok: false, message: error.message || '注册失败' }
-    }
-  }
-
-  const sendEmailCode = async email => {
-    try {
-      await AuthAPI.sendEmailCode(email)
-      return { ok: true, message: '验证码已发送，请查看邮箱' }
-    } catch (error) {
-      return { ok: false, message: error.message || '验证码发送失败' }
-    }
-  }
-
-  const registerByEmailCode = async (username, email, code, password) => {
-    try {
-      const response = await AuthAPI.registerByEmailCode(username, email, code, password)
-      saveSession(response)
-      return { ok: true, message: '注册成功' }
-    } catch (error) {
-      return { ok: false, message: error.message || '注册失败' }
-    }
-  }
-
-  const registerByPhone = async (username, phone, password) => {
-    try {
-      const response = await AuthAPI.registerByPhone(username, phone, password)
-      saveSession(response)
-      return { ok: true, message: '注册成功' }
-    } catch (error) {
-      return { ok: false, message: error.message || '注册失败' }
-    }
-  }
-
-
-  const logout = () => {
-    user.value = null
-    token.value = null
-    localStorage.removeItem('loveDiary_token')
-    localStorage.removeItem('loveDiary_user')
-  }
-
-  const loadUser = async () => {
-    if (token.value && !user.value) {
-      const storedUser = localStorage.getItem('loveDiary_user')
-      if (storedUser) {
+  actions: {
+    // ---- 初始化：从本地恢复会话 ----
+    init() {
+      const token = localStorage.getItem('loveDiary_token')
+      const userRaw = localStorage.getItem('loveDiary_user')
+      if (token && userRaw) {
         try {
-          user.value = JSON.parse(storedUser)
+          this.token = token
+          this.user = JSON.parse(userRaw)
+          this.isAuthenticated = true
         } catch (e) {
-          console.error('Failed to parse stored user:', e)
+          this.logout()
         }
       }
-      
+    },
+
+    _persist(token, user) {
+      this.token = token
+      this.user = user
+      this.isAuthenticated = true
+      localStorage.setItem('loveDiary_token', token)
+      localStorage.setItem('loveDiary_user', JSON.stringify(user))
+    },
+
+    // ---- 登录 ----
+    async login(identifier, password) {
+      const result = await AuthAPI.login(identifier, password)
+      if (result.ok) {
+        this._persist(result.token, result.user)
+        return { ok: true }
+      }
+      return { ok: false, message: result.message }
+    },
+
+    // ---- 注册 ----
+    async register(payload) {
+      const result = await AuthAPI.register(payload)
+      if (result.ok) {
+        // 注册后若直接返回会话则登录，否则提示去登录
+        if (result.token && result.user) {
+          this._persist(result.token, result.user)
+        }
+        return { ok: true, needLogin: !result.token, message: result.message }
+      }
+      return { ok: false, message: result.message }
+    },
+
+    // ---- 微信登录 ----
+    async loginByWechat(code) {
+      const result = await AuthAPI.loginByWechat(code)
+      if (result.ok) {
+        this._persist(result.token, result.user)
+        return { ok: true }
+      }
+      return { ok: false, message: result.message }
+    },
+
+    // ---- 获取最新资料（含 partner）----
+    async loadUser() {
+      if (!this.token) return
       try {
-        const response = await AuthAPI.getProfile()
-        user.value = response.user || response
-        localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
-      } catch (error) {
-        console.warn('Failed to load user from API:', error.message)
+        const result = await AuthAPI.getProfile()
+        if (result.ok) {
+          this.user = result.user
+          localStorage.setItem('loveDiary_user', JSON.stringify(result.user))
+        }
+      } catch (e) {
+        // 失败不阻塞页面
+        console.warn('loadUser 失败:', e.message)
       }
-    }
-  }
+    },
 
-  const refreshProfile = async () => {
-    if (!token.value) return null
-    try {
-      const response = await AuthAPI.getProfile()
-      user.value = response.user || response
-      localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
-      return user.value
-    } catch (error) {
-      console.warn('Failed to refresh user profile:', error.message)
-      return null
-    }
-  }
-
-  const bindPartner = async (partnerCode) => {
-    try {
-      const response = await AuthAPI.bindPartner(partnerCode)
-      if (user.value) {
-        user.value.partner = response.partner
-        await refreshProfile()
-        localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
+    // ---- 更新资料 ----
+    async updateProfile(payload) {
+      const result = await AuthAPI.updateProfile(payload)
+      if (result.ok) {
+        this.user = result.user
+        localStorage.setItem('loveDiary_user', JSON.stringify(result.user))
+        return { ok: true }
       }
-      return { ok: true, message: '绑定成功' }
-    } catch (error) {
-      return { ok: false, message: error.message || '绑定失败' }
-    }
-  }
+      return { ok: false, message: result.message }
+    },
 
-  const updateProfile = async data => {
-    try {
-      const response = await AuthAPI.updateProfile(data)
-      user.value = { ...user.value, ...(response.user || data) }
-      localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
-      return { ok: true, message: response.message || '资料已更新' }
-    } catch (error) {
-      return { ok: false, message: error.message || '资料更新失败' }
-    }
-  }
+    // ---- 绑定情侣 ----
+    async bindPartner(inviteCode) {
+      const result = await AuthAPI.bindPartner(inviteCode)
+      if (result.ok) {
+        // 重新拉取资料以更新 partner / couple_id
+        await this.loadUser()
+        return { ok: true, message: result.message }
+      }
+      return { ok: false, message: result.message }
+    },
 
-  const bindVirtualPartner = () => {
-    const virtualPartner = {
-      id: '2',
-      nickname: '虚拟情人',
-      phone: '13800138001',
-      createdAt: '2024-01-02T00:00:00Z'
-    }
-    
-    if (user.value) {
-      user.value.partner = virtualPartner
-      localStorage.setItem('loveDiary_partner', JSON.stringify(virtualPartner))
-      localStorage.setItem('loveDiary_user', JSON.stringify(user.value))
-    }
-    return { ok: true, message: '虚拟情人绑定成功' }
-  }
+    async unbindPartner() {
+      const result = await AuthAPI.unbindPartner()
+      if (result.ok) {
+        await this.loadUser()
+        return { ok: true }
+      }
+      return { ok: false, message: result.message }
+    },
 
-  return {
-    user,
-    token,
-    isLoggedIn,
-    login,
-    register,
-    sendEmailCode,
-    registerByEmailCode,
-    registerByPhone,
-    logout,
-    loadUser,
-    refreshProfile,
-    bindPartner,
-    updateProfile,
-    bindVirtualPartner
+    logout() {
+      this.user = null
+      this.token = null
+      this.isAuthenticated = false
+      localStorage.removeItem('loveDiary_token')
+      localStorage.removeItem('loveDiary_user')
+    }
   }
 })

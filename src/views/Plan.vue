@@ -121,8 +121,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { MockAPI } from '@/api/mock'
-import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
+import { PlanAPI } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -224,8 +223,8 @@ const savePlan = async () => {
   }
   
   try {
-    if (editingPlan.value) await MockAPI.plan.update(editingPlan.value.id, data)
-    else await MockAPI.plan.create(data)
+    if (editingPlan.value) await PlanAPI.update(editingPlan.value.id, data)
+    else await PlanAPI.create(data)
     
     closeCreateModal()
     await loadPlans(false)
@@ -237,7 +236,7 @@ const savePlan = async () => {
 
 const toggleComplete = async (plan) => {
   try {
-    await MockAPI.plan.update(plan.id, { completed: !plan.completed })
+    await PlanAPI.update(plan.id, { completed: !plan.completed })
     await loadPlans(false)
     pushSharedState('plans', plans.value)
   } catch (error) {
@@ -248,7 +247,7 @@ const toggleComplete = async (plan) => {
 const deletePlan = async (id) => {
   if (confirm('确定要删除这个计划吗？')) {
     try {
-      await MockAPI.plan.delete(id)
+      await PlanAPI.delete(id)
       await loadPlans(false)
       pushSharedState('plans', plans.value)
     } catch (error) {
@@ -257,21 +256,14 @@ const deletePlan = async (id) => {
   }
 }
 
-const loadPlans = async (sync = true) => {
+const loadPlans = async () => {
   try {
-    const response = await MockAPI.plan.list()
-    plans.value = response.data.map(item => ({
+    const response = await PlanAPI.list()
+    plans.value = (response.data || []).map(item => ({
       ...item,
       date: item.date || item.target_date || '',
       completedAt: item.completedAt || item.completed_at || ''
     }))
-    if (sync) {
-      const shared = await hydrateSharedState('plans', plans.value)
-      if (shared.enabled && Array.isArray(shared.payload)) {
-        plans.value = shared.payload
-        localStorage.setItem('loveDiary_plans', JSON.stringify(plans.value))
-      }
-    }
   } catch (error) {
     console.error('Load plans failed:', error)
   }

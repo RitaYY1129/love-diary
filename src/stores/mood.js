@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { MockAPI } from '@/api/mock'
+import { MoodAPI } from '@/api'
 import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
 export const useMoodStore = defineStore('mood', () => {
@@ -8,7 +8,7 @@ export const useMoodStore = defineStore('mood', () => {
 
   const list = async () => {
     try {
-      const response = await MockAPI.mood.list()
+      const response = await MoodAPI.list()
       moods.value = response.data
       const shared = await hydrateSharedState('mood', moods.value)
       if (shared.enabled && Array.isArray(shared.payload)) {
@@ -24,7 +24,7 @@ export const useMoodStore = defineStore('mood', () => {
 
   const create = async (data) => {
     try {
-      const response = await MockAPI.mood.create(data)
+      const response = await MoodAPI.create(data)
       const today = new Date().toISOString().split('T')[0]
       const existingIndex = moods.value.findIndex(m => m.date === today)
       if (existingIndex !== -1) {
@@ -42,7 +42,7 @@ export const useMoodStore = defineStore('mood', () => {
 
   const update = async (id, data) => {
     try {
-      const response = await MockAPI.mood.update(id, data)
+      const response = await MoodAPI.update(id, data)
       const index = moods.value.findIndex(m => m.id === id)
       if (index !== -1) {
         moods.value[index] = response
@@ -57,7 +57,7 @@ export const useMoodStore = defineStore('mood', () => {
 
   const deleteMood = async (id) => {
     try {
-      await MockAPI.mood.delete(id)
+      await MoodAPI.delete(id)
       moods.value = moods.value.filter(m => m.id !== id)
       pushSharedState('mood', moods.value)
       return true
@@ -69,7 +69,7 @@ export const useMoodStore = defineStore('mood', () => {
 
   const stats = async () => {
     try {
-      return await MockAPI.mood.stats()
+      return await MoodAPI.stats()
     } catch (error) {
       console.error('Failed to get mood stats:', error)
       return null

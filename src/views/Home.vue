@@ -272,7 +272,7 @@ import { useAuthStore } from '../stores/auth'
 import { useCheckinStore } from '../stores/checkin'
 import { useDiaryStore } from '../stores/diary'
 import { useMoodStore } from '../stores/mood'
-import { MockAPI } from '@/api/mock'
+import { AnniversaryAPI, PlanAPI } from '@/api'
 import memoryCafe from '../../assets/img/memory-cafe-web.jpg'
 import memoryMorning from '../../assets/img/memory-morning-web.jpg'
 
@@ -634,8 +634,8 @@ onMounted(async () => {
     diaryStore.list?.(),
     checkinStore.loadHistory?.(),
     checkinStore.loadStreak?.(),
-    MockAPI.anniversary.list(),
-    MockAPI.plan.list()
+    AnniversaryAPI.list(),
+    PlanAPI.list()
   ]
 
   const results = await Promise.allSettled(tasks)

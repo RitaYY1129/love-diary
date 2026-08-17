@@ -1,282 +1,291 @@
-import axios from 'axios'
-import { supabaseAuth, supabaseRest, supabaseFunctions } from './supabase'
+// ============================================================================
+//  统一 API 层 —— 全部走 Supabase 云后端（无需本地服务器，手机/网页直接可用）
+//  底层使用 src/api/supabase.js 的 fetch 封装；页面调用方式保持不变。
+// ============================================================================
+import { supabaseRest, supabaseAuth, supabaseFunctions } from './supabase'
 
-// 开发环境使用同源代理，避免手机访问局域网地址时把 localhost 解析成手机自身。
-// Android/生产构建仍由 VITE_API_BASE 指向正式 HTTPS 后端。
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+function currentUserId() {
+  const raw = localStorage.getItem('loveDiary_user')
+  if (!raw) return null
+  try { return JSON.parse(raw).id || null } catch { return null }
+}
+function token() { return localStorage.getItem('loveDiary_token') }
+function withOwner(p) { return { ...p, owner_id: currentUserId() } }
 
-const axiosInstance = axios.create({
-  baseURL: API_BASE,
-  timeout: 10000
-})
-
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('loveDiary_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-axiosInstance.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('loveDiary_token')
-      localStorage.removeItem('loveDiary_user')
-      window.location.href = import.meta.env.BASE_URL || '/'
-    }
-    return Promise.reject(new Error(error.response?.data?.message || error.message))
-  }
-)
-
+// ---------------------------------------------------------------------------
+//  AuthAPI —— 委托 supabase.js
+// ---------------------------------------------------------------------------
 export const AuthAPI = {
-  login: async (identifier, password) => {
-    const session = await supabaseAuth.signIn(identifier, password)
-    const user = await supabaseAuth.getUser(session.access_token)
-    const profiles = await supabaseRest.get(`profiles?id=eq.${user.id}&select=*`, session.access_token)
-    return { token: session.access_token, user: profiles[0] || user }
-  },
+  login: (identifier, password) => supabaseAuth.signIn(identifier, password),
+  register: (payload) => supabaseAuth.signUp(payload),
+  loginByWechat: (code) => supabaseAuth.signInWithWechat(code),
+  getProfile: () => supabaseAuth.getProfile(),
+  updateProfile: (payload) => supabaseAuth.updateProfile(payload),
+  bindPartner: (inviteCode) => supabaseAuth.bindPartner(inviteCode),
+  unbindPartner: () => supabaseAuth.unbindPartner()
+}
 
-  register: async (username, identifier, password) => {
-    const session = await supabaseAuth.signUp({ username, identifier, password })
-    const user = await supabaseAuth.getUser(session.access_token)
-    const profiles = await supabaseRest.get(`profiles?id=eq.${user.id}&select=*`, session.access_token)
-    return { token: session.access_token, user: profiles[0] || user }
-  },
-
-  sendEmailCode: async email => await supabaseAuth.sendEmailCode(email),
-
-  registerByEmailCode: async (username, email, code, password) => {
-    const session = await supabaseAuth.verifyEmailCode(email, code)
-    const user = await supabaseAuth.updateUser(session.access_token, {
-      password,
-      data: { username: username.trim().toLowerCase(), identifier: email.trim().toLowerCase() }
-    })
-    const profiles = await supabaseRest.patch(
-      `profiles?id=eq.${user.id}`,
-      { username: username.trim().toLowerCase(), identifier: email.trim(), nickname: username.trim() },
-      session.access_token
-    )
-    return { token: session.access_token, user: profiles[0] || user }
-  },
-
-  registerByPhone: async (username, phone, password) => {
-    await supabaseFunctions.registerPhone({ username, phone, password })
-    return await AuthAPI.login(phone, password)
-  },
-
-  loginByWechat: async (code) => {
-    return await axiosInstance.post('/auth/wechat', { code })
-  },
-
-  getProfile: async () => {
-    const token = localStorage.getItem('loveDiary_token')
-    const user = await supabaseAuth.getUser(token)
-    const profiles = await supabaseRest.get(`profiles?id=eq.${user.id}&select=*`, token)
-    return { user: profiles[0] || user }
-  },
-
-  updateProfile: async (data) => {
-    return await axiosInstance.put('/auth/profile', data)
-  },
-
-  bindPartner: async (partnerCode) => {
-    const token = localStorage.getItem('loveDiary_token')
-    const data = await supabaseRest.post('rpc/bind_partner', { partner_code: partnerCode }, token)
-    return { partner: data }
-  },
-
-  unbindPartner: async () => {
-    return await axiosInstance.post('/auth/partner/unbind')
+// ---------------------------------------------------------------------------
+//  通用 REST 表操作（PostgREST 查询参数风格）
+// ---------------------------------------------------------------------------
+function restApi(table, { idField = 'id' } = {}) {
+  return {
+    list: async (query = {}) => {
+      let path = `${table}?select=*`
+      if (query.eq) for (const [k, v] of Object.entries(query.eq)) path += `&${k}=eq.${encodeURIComponent(v)}`
+      if (query.order) path += `&order=${query.order}.${query.ascending ? 'asc' : 'desc'}`
+      else path += '&order=created_at.desc'
+      if (query.limit) path += `&limit=${query.limit}`
+      const data = await supabaseRest.get(path, token())
+      return { data: data || [] }
+    },
+    get: async (id) => {
+      const data = await supabaseRest.get(`${table}?select=*&${idField}=eq.${id}`, token())
+      return Array.isArray(data) ? data[0] : data
+    },
+    create: async (item) => {
+      const data = await supabaseRest.post(`${table}?select=*`, withOwner(item), token())
+      return Array.isArray(data) ? data[0] : data
+    },
+    update: async (id, item) => {
+      const data = await supabaseRest.patch(`${table}?${idField}=eq.${id}&select=*`, item, token())
+      return Array.isArray(data) ? data[0] : data
+    },
+    delete: async (id) => {
+      await supabaseRest.delete(`${table}?${idField}=eq.${id}`, token())
+      return { success: true }
+    }
   }
 }
 
-export const DiaryAPI = {
-  list: async (page = 1, limit = 10) => {
-    return await axiosInstance.get('/diaries', { params: { page, limit } })
-  },
-
-  get: async (id) => {
-    return await axiosInstance.get(`/diaries/${id}`)
-  },
-
-  create: async (item) => {
-    return await axiosInstance.post('/diaries', item)
-  },
-
-  update: async (id, item) => {
-    return await axiosInstance.put(`/diaries/${id}`, item)
-  },
-
-  delete: async (id) => {
-    return await axiosInstance.delete(`/diaries/${id}`)
+export const DiaryAPI = restApi('diaries')
+export const WishAPI = {
+  ...restApi('wishes'),
+  complete: async (id) => {
+    const data = await supabaseRest.patch(`wishes?id=eq.${id}&select=*`, { completed: true, completed_at: new Date().toISOString() }, token())
+    return Array.isArray(data) ? data[0] : data
   }
 }
-
+export const PlanAPI = {
+  ...restApi('plans'),
+  complete: async (id) => {
+    const data = await supabaseRest.patch(`plans?id=eq.${id}&select=*`, { completed: true, completed_at: new Date().toISOString() }, token())
+    return Array.isArray(data) ? data[0] : data
+  }
+}
+export const AnniversaryAPI = restApi('anniversaries')
+export const PhotoAPI = restApi('photos')
 export const MoodAPI = {
   list: async () => {
-    return await axiosInstance.get('/moods')
+    const data = await supabaseRest.get('moods?select=*&order=created_at.desc', token())
+    return { data: data || [] }
   },
-
+  get: async (id) => {
+    const data = await supabaseRest.get(`moods?select=*&id=eq.${id}`, token())
+    return Array.isArray(data) ? data[0] : data
+  },
   create: async (item) => {
-    return await axiosInstance.post('/moods', item)
+    const data = await supabaseRest.post('moods?select=*', withOwner(item), token())
+    return Array.isArray(data) ? data[0] : data
   },
-
+  update: async (id, item) => {
+    const data = await supabaseRest.patch(`moods?id=eq.${id}&select=*`, item, token())
+    return Array.isArray(data) ? data[0] : data
+  },
+  delete: async (id) => {
+    await supabaseRest.delete(`moods?id=eq.${id}`, token())
+    return { success: true }
+  },
   stats: async () => {
-    return await axiosInstance.get('/moods/stats')
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`moods?select=score&owner_id=eq.${uid}`, token())
+    const arr = data || []
+    return {
+      count: arr.length,
+      average: arr.length ? Math.round(arr.reduce((s, m) => s + (m.score || 0), 0) / arr.length * 10) / 10 : 0
+    }
   }
 }
-
 export const CheckinAPI = {
   checkin: async () => {
-    return await axiosInstance.post('/checkins')
+    const uid = currentUserId()
+    const today = new Date().toISOString().split('T')[0]
+    const data = await supabaseRest.post(`checkins?select=*&on_conflict=owner_id,date`, { owner_id: uid, date: today }, token())
+    return { success: true, data: Array.isArray(data) ? data[0] : data }
   },
-
   getHistory: async () => {
-    return await axiosInstance.get('/checkins/history')
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`checkins?select=date&owner_id=eq.${uid}`, token())
+    return { data: (data || []).map(d => d.date) }
   },
-
+  getStreak: async () => {
+    const stats = await CheckinAPI.getStats()
+    return { streak: stats.streak, total: stats.total }
+  },
   getStats: async () => {
-    return await axiosInstance.get('/checkins/stats')
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`checkins?select=date&owner_id=eq.${uid}`, token())
+    const dates = (data || []).map(d => d.date).sort().reverse()
+    let streak = 0
+    const today = new Date()
+    for (let i = 0; i < dates.length; i++) {
+      const d = new Date(dates[i])
+      const exp = new Date(today); exp.setDate(exp.getDate() - i)
+      if (d.toDateString() === exp.toDateString()) streak++; else break
+    }
+    return { total: dates.length, streak, thisMonth: dates.filter(d => new Date(d).getMonth() === today.getMonth()).length }
   }
 }
-
-export const WishAPI = {
-  list: async () => {
-    return await axiosInstance.get('/wishes')
-  },
-
-  create: async (item) => {
-    return await axiosInstance.post('/wishes', item)
-  },
-
-  update: async (id, item) => {
-    return await axiosInstance.put(`/wishes/${id}`, item)
-  },
-
-  delete: async (id) => {
-    return await axiosInstance.delete(`/wishes/${id}`)
-  },
-
-  complete: async (id) => {
-    return await axiosInstance.post(`/wishes/${id}/complete`)
-  }
-}
-
-export const AnniversaryAPI = {
-  list: async () => {
-    return await axiosInstance.get('/anniversaries')
-  },
-
-  create: async (item) => {
-    return await axiosInstance.post('/anniversaries', item)
-  },
-
-  update: async (id, item) => {
-    return await axiosInstance.put(`/anniversaries/${id}`, item)
-  },
-
-  delete: async (id) => {
-    return await axiosInstance.delete(`/anniversaries/${id}`)
-  }
-}
-
-export const PhotoAPI = {
-  list: async () => {
-    return await axiosInstance.get('/photos')
-  },
-
-  upload: async (item) => {
-    return await axiosInstance.post('/photos', item)
-  },
-
-  update: async (id, item) => {
-    return await axiosInstance.put(`/photos/${id}`, item)
-  },
-
-  delete: async (id) => {
-    return await axiosInstance.delete(`/photos/${id}`)
-  }
-}
-
-export const PlanAPI = {
-  list: async () => {
-    return await axiosInstance.get('/plans')
-  },
-
-  create: async (item) => {
-    return await axiosInstance.post('/plans', item)
-  },
-
-  update: async (id, item) => {
-    return await axiosInstance.put(`/plans/${id}`, item)
-  },
-
-  delete: async (id) => {
-    return await axiosInstance.delete(`/plans/${id}`)
-  },
-
-  complete: async (id) => {
-    return await axiosInstance.post(`/plans/${id}/complete`)
-  }
-}
-
 export const LocationAPI = {
   get: async () => {
-    return await axiosInstance.get('/locations')
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`locations?select=*&owner_id=eq.${uid}&order=created_at.desc&limit=1`, token())
+    return Array.isArray(data) ? data[0] : data
   },
-
   update: async (item) => {
-    return await axiosInstance.post('/locations', item)
+    const data = await supabaseRest.post('locations?select=*', withOwner(item), token())
+    return Array.isArray(data) ? data[0] : data
   },
-
   getPartner: async () => {
-    return await axiosInstance.get('/locations/partner')
+    const cid = await getMyCoupleId()
+    if (!cid) return null
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`locations?select=*&couple_id=eq.${cid}&owner_id=neq.${uid}&order=created_at.desc&limit=1`, token())
+    return Array.isArray(data) ? data[0] : data
   },
-
   getHistory: async () => {
-    return await axiosInstance.get('/locations/history')
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`locations?select=*&owner_id=eq.${uid}&order=created_at.desc`, token())
+    return { data: data || [] }
+  }
+}
+export const FinanceAPI = {
+  list: async (page = 1, limit = 20) => {
+    const from = (page - 1) * limit
+    const data = await supabaseRest.get(`finances?select=*&order=happened_at.desc&limit=${limit}&offset=${from}`, token())
+    return { data: data || [], total: data?.length || 0 }
+  },
+  create: async (item) => {
+    const data = await supabaseRest.post('finances?select=*', withOwner(item), token())
+    return Array.isArray(data) ? data[0] : data
+  },
+  update: async (id, item) => {
+    const data = await supabaseRest.patch(`finances?id=eq.${id}&select=*`, item, token())
+    return Array.isArray(data) ? data[0] : data
+  },
+  delete: async (id) => {
+    await supabaseRest.delete(`finances?id=eq.${id}`, token())
+    return { success: true }
+  },
+  getStats: async () => {
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`finances?select=type,amount&owner_id=eq.${uid}`, token())
+    let income = 0, expense = 0
+    for (const r of data || []) {
+      if (r.type === 'income') income += Number(r.amount)
+      else expense += Number(r.amount)
+    }
+    return { income, expense, balance: income - expense }
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  SharingAPI —— couple_shared_states（情侣共享状态双向同步）
+// ---------------------------------------------------------------------------
+export const SharingAPI = {
+  getPreferences: async () => {
+    const s = await SharingAPI.getState('preferences')
+    return s.payload || {}
+  },
+  updatePreferences: async (preferences) => {
+    const cur = (await SharingAPI.getState('preferences')).payload || {}
+    return SharingAPI.putState('preferences', { ...cur, ...preferences })
+  },
+  getState: async (module) => {
+    const cid = await getMyCoupleId()
+    if (!cid) return { payload: null }
+    const data = await supabaseRest.get(`couple_shared_states?select=state&couple_id=eq.${cid}&module=eq.${module}`, token())
+    return { payload: Array.isArray(data) && data[0] ? data[0].state : null }
+  },
+  putState: async (module, payload) => {
+    const cid = await getMyCoupleId()
+    if (!cid) throw new Error('尚未绑定情侣')
+    const data = await supabaseRest.post(`couple_shared_states?select=*&on_conflict=couple_id,module`, { couple_id: cid, module, state: payload }, token())
+    return { payload: Array.isArray(data) ? data[0].state : payload }
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  ChatAPI —— chat_messages（轮询拉取，无 realtime 依赖）
+// ---------------------------------------------------------------------------
+export const ChatAPI = {
+  list: async (afterId = null) => {
+    let path = 'chat_messages?select=*&order=created_at.asc'
+    if (afterId) path += `&id=gt.${afterId}`
+    const data = await supabaseRest.get(path, token())
+    return { data: data || [] }
+  },
+  send: async (type, content, metadata = {}) => {
+    const cid = await getMyCoupleId()
+    if (!cid) throw new Error('尚未绑定情侣，无法聊天')
+    const data = await supabaseRest.post('chat_messages?select=*', { couple_id: cid, sender_id: currentUserId(), type, content, metadata }, token())
+    return Array.isArray(data) ? data[0] : data
+  },
+  subscribe: (onInsert) => {
+    // 降级为轮询：每秒拉取自增 id 之后的消息
+    let lastId = null
+    const timer = setInterval(async () => {
+      try {
+        const { data } = await ChatAPI.list(lastId)
+        for (const m of data) {
+          if (!lastId || m.id > lastId) { lastId = m.id; onInsert(m) }
+        }
+      } catch {}
+    }, 1500)
+    return () => clearInterval(timer)
+  }
+}
+
+export const CallAPI = {
+  list: async (limit = 50) => {
+    const cid = await getMyCoupleId()
+    if (!cid) return { data: [] }
+    const data = await supabaseRest.get(`call_records?select=*&couple_id=eq.${cid}&order=created_at.desc&limit=${limit}`, token())
+    return { data: data || [] }
+  },
+  record: async (calleeId, duration) => {
+    const cid = await getMyCoupleId()
+    const data = await supabaseRest.post('call_records?select=*', { couple_id: cid, caller_id: currentUserId(), callee_id: calleeId, duration }, token())
+    return Array.isArray(data) ? data[0] : data
   }
 }
 
 export const CalmModeAPI = {
-  get: async () => await axiosInstance.get('/calm-mode'),
-  request: async (durationHours) => await axiosInstance.post('/calm-mode/request', { durationHours }),
-  accept: async id => await axiosInstance.post(`/calm-mode/${id}/accept`),
-  exit: async id => await axiosInstance.post(`/calm-mode/${id}/exit`)
-}
-
-export const ChatAPI = {
-  list: async (afterId = 0) => await axiosInstance.get('/chat', { params: { afterId } }),
-  send: async (type, content, metadata = {}) => await axiosInstance.post('/chat', { type, content, metadata })
-}
-
-export const CallAPI = {
-  list: async (limit = 50) => await axiosInstance.get('/calls', { params: { limit } })
-}
-
-export const SharingAPI = {
-  getPreferences: async () => ({ preferences: {} }),
-  updatePreferences: async preferences => ({ preferences }),
-  getState: async module => {
-    const token = localStorage.getItem('loveDiary_token')
-    const profile = await AuthAPI.getProfile()
-    const coupleId = profile.user.couple_id || profile.user.id
-    const rows = await supabaseRest.get(`couple_shared_states?couple_id=eq.${encodeURIComponent(coupleId)}&module_key=eq.${encodeURIComponent(module)}&select=payload`, token)
-    return { payload: rows[0]?.payload ?? null }
+  get: async () => {
+    const cid = await getMyCoupleId()
+    if (!cid) return null
+    const data = await supabaseRest.get(`calm_modes?select=*&couple_id=eq.${cid}&order=created_at.desc&limit=1`, token())
+    return Array.isArray(data) ? data[0] : null
   },
-  putState: async (module, payload) => {
-    const token = localStorage.getItem('loveDiary_token')
-    const profile = await AuthAPI.getProfile()
-    const coupleId = profile.user.couple_id || profile.user.id
-    return supabaseRest.post('couple_shared_states?on_conflict=couple_id,module_key', {
-      couple_id: coupleId, module_key: module, payload, updated_by: profile.user.id
-    }, token, { Prefer: 'resolution=merge-duplicates,return=representation' })
+  request: async (durationHours) => {
+    const cid = await getMyCoupleId()
+    const data = await supabaseRest.post('calm_modes?select=*', { couple_id: cid, requester_id: currentUserId(), duration_hours: durationHours, status: 'pending' }, token())
+    return Array.isArray(data) ? data[0] : data
+  },
+  accept: async (id) => {
+    const data = await supabaseRest.patch(`calm_modes?id=eq.${id}&select=*`, { status: 'active' }, token())
+    return Array.isArray(data) ? data[0] : data
+  },
+  exit: async (id) => {
+    const data = await supabaseRest.patch(`calm_modes?id=eq.${id}&select=*`, { status: 'ended' }, token())
+    return Array.isArray(data) ? data[0] : data
   }
+}
+
+// 辅助：取当前用户 couple_id
+async function getMyCoupleId() {
+  const uid = currentUserId()
+  if (!uid) return null
+  const data = await supabaseRest.get(`profiles?select=couple_id&id=eq.${uid}`, token())
+  return Array.isArray(data) && data[0] ? data[0].couple_id || null : null
 }

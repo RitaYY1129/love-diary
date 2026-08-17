@@ -110,8 +110,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { MockAPI } from '@/api/mock'
-import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
+import { AnniversaryAPI } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -202,8 +201,8 @@ const saveAnniversary = async () => {
   const isEditing = !!editingAnniversary.value
   const payload = { ...form.value, name: form.value.name.trim() }
   const saved = editingAnniversary.value
-    ? await MockAPI.anniversary.update(editingAnniversary.value.id, payload)
-    : await MockAPI.anniversary.create(payload)
+    ? await AnniversaryAPI.update(editingAnniversary.value.id, payload)
+    : await AnniversaryAPI.create(payload)
   if (saved) {
     const index = anniversaries.value.findIndex(item => item.id === saved.id)
     if (index >= 0) anniversaries.value[index] = saved
@@ -217,18 +216,13 @@ const saveAnniversary = async () => {
 }
 const deleteAnniversary = async id => {
   if (!confirm('确定删除这个纪念日吗？')) return
-  await MockAPI.anniversary.delete(id)
+  await AnniversaryAPI.delete(id)
   anniversaries.value = anniversaries.value.filter(item => item.id !== id)
   pushSharedState('anniversary', anniversaries.value)
   showToast('纪念日已删除')
 }
 const loadAnniversaries = async () => {
-  anniversaries.value = (await MockAPI.anniversary.list()).data
-  const shared = await hydrateSharedState('anniversary', anniversaries.value)
-  if (shared.enabled && Array.isArray(shared.payload)) {
-    anniversaries.value = shared.payload
-    localStorage.setItem('loveDiary_anniversaries', JSON.stringify(anniversaries.value))
-  }
+  anniversaries.value = (await AnniversaryAPI.list()).data || []
 }
 
 onMounted(() => { loadAnniversaries(); timer = setInterval(() => { clock.value = Date.now() }, 1000) })

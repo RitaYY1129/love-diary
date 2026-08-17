@@ -109,7 +109,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { MockAPI } from '@/api/mock'
+import { WishAPI } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -191,13 +191,13 @@ const saveWish = async () => {
   const data = {
     title: form.value.title,
     description: form.value.description || null,
-    targetDate: form.value.targetDate || null
+    target_date: form.value.targetDate || null
   }
-  
+
   try {
-    if (editingWish.value) await MockAPI.wish.update(editingWish.value.id, data)
-    else await MockAPI.wish.create(data)
-    
+    if (editingWish.value) await WishAPI.update(editingWish.value.id, data)
+    else await WishAPI.create(data)
+
     closeCreateModal()
     await loadWishes()
   } catch (error) {
@@ -207,7 +207,7 @@ const saveWish = async () => {
 
 const toggleComplete = async (wish) => {
   try {
-    await MockAPI.wish.update(wish.id, { completed: !wish.completed })
+    await WishAPI.update(wish.id, { completed: !wish.completed })
     await loadWishes()
   } catch (error) {
     console.error('Toggle complete failed:', error)
@@ -217,7 +217,7 @@ const toggleComplete = async (wish) => {
 const deleteWish = async (id) => {
   if (confirm('确定要删除这个心愿吗？')) {
     try {
-      await MockAPI.wish.delete(id)
+      await WishAPI.delete(id)
       await loadWishes()
     } catch (error) {
       console.error('Delete wish failed:', error)
@@ -227,7 +227,7 @@ const deleteWish = async (id) => {
 
 const loadWishes = async () => {
   try {
-    const response = await MockAPI.wish.list()
+    const response = await WishAPI.list()
     wishes.value = response.data.map(item => ({
       ...item,
       targetDate: item.targetDate || item.target_date || '',

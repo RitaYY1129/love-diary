@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { MockAPI } from '@/api/mock'
-import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
+import { CheckinAPI } from '@/api'
 
 export const useCheckinStore = defineStore('checkin', () => {
   const history = ref([])
@@ -9,14 +8,13 @@ export const useCheckinStore = defineStore('checkin', () => {
 
   const checkin = async () => {
     try {
-      const response = await MockAPI.checkin.checkin()
+      const response = await CheckinAPI.checkin()
       if (response.success) {
         const today = new Date().toISOString().split('T')[0]
         if (!history.value.includes(today)) {
           history.value.push(today)
         }
         streak.value = response.streak
-        pushSharedState('checkin', history.value)
       }
       return response
     } catch (error) {
@@ -27,10 +25,8 @@ export const useCheckinStore = defineStore('checkin', () => {
 
   const loadHistory = async () => {
     try {
-      const response = await MockAPI.checkin.getHistory()
-      history.value = response.data
-      const shared = await hydrateSharedState('checkin', history.value)
-      if (shared.enabled && Array.isArray(shared.payload)) history.value = shared.payload
+      const response = await CheckinAPI.getHistory()
+      history.value = response.data || []
       return history.value
     } catch (error) {
       console.error('Failed to load checkin history:', error)
@@ -40,7 +36,7 @@ export const useCheckinStore = defineStore('checkin', () => {
 
   const loadStreak = async () => {
     try {
-      const response = await MockAPI.checkin.getStreak()
+      const response = await CheckinAPI.getStreak()
       streak.value = response.streak
       return streak.value
     } catch (error) {
@@ -51,7 +47,7 @@ export const useCheckinStore = defineStore('checkin', () => {
 
   const getStats = async () => {
     try {
-      return await MockAPI.checkin.getStats()
+      return await CheckinAPI.getStats()
     } catch (error) {
       console.error('Failed to get checkin stats:', error)
       return null

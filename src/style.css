@@ -688,7 +688,10 @@ input:checked + .slider { background:linear-gradient(115deg,var(--love-500),var(
   button,
   [role="button"],
   input[type="checkbox"],
-  input[type="radio"] {
+  input[type="radio"],
+  .page-content .card > div,
+  .menu-item,
+  .list-item {
     touch-action: manipulation;
   }
   button:not(.tab-item):not(.btn-back),
@@ -707,10 +710,42 @@ input:checked + .slider { background:linear-gradient(115deg,var(--love-500),var(
     min-width: 44px;
     padding: 10px 14px;
   }
+  /* 可点击的 div/列表项：保证足够高的点击区与按压反馈 */
+  .page-content .card > div,
+  .page-content .card > .flex,
+  .menu-item,
+  .list-item {
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .page-content .card > div:active,
+  .page-content .card > .flex:active,
+  .menu-item:active,
+  .list-item:active {
+    background: #fff5f6;
+  }
   #app > .min-h-screen.bg-gradient-to-br .flex.justify-center.gap-4 > button {
     min-width: 132px;
     min-height: 52px;
     font-size: 17px;
+  }
+}
+
+/* 聊天头部窄屏防溢出：保证语音/视频按钮在手机上不被挤掉点击区 */
+@media (max-width: 400px) {
+  .chat-header {
+    grid-template-columns: 34px 1fr auto;
+    gap: 6px;
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+  .header-right {
+    gap: 6px;
+  }
+  .call-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
   }
 }
 
