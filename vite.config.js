@@ -17,8 +17,8 @@ function copyPwaIcons() {
 
 export default defineConfig({
   // GitHub Pages uses /love-diary/; set VITE_APP_BASE=/ on Cloudflare Pages.
-  // GitHub Pages 部署在 /Love-diary/ 子目录；Cloudflare Pages 等根域名设 VITE_APP_BASE=/
-  base: process.env.VITE_APP_BASE || '/Love-diary/',
+  // GitHub Pages 部署在 /love-diary/ 子目录；Cloudflare Pages 等根域名设 VITE_APP_BASE=/
+  base: process.env.VITE_APP_BASE || '/love-diary/',
   plugins: [vue(), copyPwaIcons()],
   resolve: {
     alias: {
