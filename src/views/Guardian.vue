@@ -157,9 +157,13 @@ const showToast = message => {
   toastTimer = setTimeout(() => { toast.value = '' }, 2200)
 }
 const applyPreferences = response => {
-  mySharing.value = Boolean(response.preferences?.device_activity)
-  partnerSharing.value = Boolean(response.partnerPreferences?.device_activity)
-  effectiveSharing.value = Boolean(response.effective?.device_activity)
+  const prefs = response?.preferences || response || {}
+  const partnerPrefs = response?.partnerPreferences || {}
+  const myVal = Boolean(prefs.device_activity)
+  const partnerVal = Boolean(partnerPrefs.device_activity)
+  mySharing.value = myVal
+  partnerSharing.value = partnerVal
+  effectiveSharing.value = myVal && partnerVal
 }
 const assignPartnerActivity = payload => {
   const data = payload?.[String(partner.value?.id)] || {}
@@ -197,11 +201,12 @@ const refreshAll = async () => {
 const toggleMySharing = async () => {
   permissionSaving.value = true
   try {
-    applyPreferences(await SharingAPI.updatePreferences({ device_activity: !mySharing.value }))
+    const enabled = !mySharing.value
+    await SharingAPI.updatePreferences({ device_activity: enabled, deviceActivity: enabled })
+    await refreshAll()
     showToast(mySharing.value ? '已开启，等待对方确认' : '已关闭守护动态共享')
-    if (effectiveSharing.value) await loadSharedActivity()
   } catch (error) {
-    showToast(error.message || '设置保存失败')
+    showToast(error?.message || '设置保存失败')
   } finally {
     permissionSaving.value = false
   }

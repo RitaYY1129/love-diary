@@ -89,7 +89,7 @@ export const useMoodStore = defineStore('mood', () => {
 
   const getToday = () => {
     const today = new Date().toISOString().split('T')[0]
-    return moods.value.find(m => m.date === today) || null
+    return moods.value.find(m => (m.date || m.created_at?.slice(0, 10)) === today) || null
   }
 
   return {

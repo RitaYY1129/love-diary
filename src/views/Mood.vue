@@ -75,7 +75,7 @@
               <span class="text-2xl">{{ mood.emoji }}</span>
               <div>
                 <div class="font-medium">{{ getMoodLabel(mood.mood) }}</div>
-                <div class="text-xs text-gray-500">{{ formatDate(mood.createdAt) }}</div>
+                <div class="text-xs text-gray-500">{{ formatDate(normalizeDate(mood)) }}</div>
               </div>
             </div>
             <button @click="deleteMood(mood.id)" class="text-danger text-sm">删除</button>
@@ -188,15 +188,15 @@ const stats = ref({
 const weekMoods = computed(() => {
   const days = []
   const today = new Date()
-  
+
   for (let i = 6; i >= 0; i--) {
     const date = new Date(today)
     date.setDate(date.getDate() - i)
     const dateStr = date.toISOString().split('T')[0]
-    
-    const mood = moodHistory.value.find(m => m.date === dateStr)
+
+    const mood = moodHistory.value.find(m => normalizeDate(m) === dateStr)
     const moodConfig = mood ? moods.find(m => m.value === mood.mood) : null
-    
+
     days.push({
       date: dateStr,
       label: ['日', '一', '二', '三', '四', '五', '六'][date.getDay()],
@@ -204,7 +204,7 @@ const weekMoods = computed(() => {
       color: moodConfig?.color || 'bg-gray-200'
     })
   }
-  
+
   return days
 })
 
@@ -212,6 +212,8 @@ const getMoodLabel = (moodValue) => {
   const mood = moods.find(m => m.value === moodValue)
   return mood?.label || moodValue
 }
+
+const normalizeDate = (m) => m?.date || m?.created_at?.slice(0, 10) || ''
 
 const formatDate = (dateStr) => {
   if (!dateStr) return ''

@@ -236,20 +236,20 @@ const guardianEvents = computed(() => {
     time: formatEventClock(event.timestamp)
   }))
 })
-const timelineItems = computed(() => [
-  ...messages.value.map(message => ({ ...message, kind: 'message' })),
-  ...guardianEvents.value,
-  ...callHistory.value.map(call => ({
+const timelineItems = computed(() => {
+  const msgs = messages.value.map(m => ({ ...normalizeMessage(m), kind: 'message' })).filter(Boolean)
+  const calls = callHistory.value.map(call => ({
     ...call,
     id: `call-${call.id}`,
     kind: 'call',
     time: formatEventClock(call.createdAt)
   }))
-].sort((left, right) => {
-  const leftTime = new Date(left.createdAt || left.timestamp || 0).getTime()
-  const rightTime = new Date(right.createdAt || right.timestamp || 0).getTime()
-  return leftTime - rightTime
-}))
+  return [...msgs, ...guardianEvents.value, ...calls].sort((left, right) => {
+    const leftTime = new Date(left.createdAt || left.timestamp || 0).getTime()
+    const rightTime = new Date(right.createdAt || right.timestamp || 0).getTime()
+    return leftTime - rightTime
+  })
+})
 
 const inputText = ref('')
 const isRecording = ref(false)
@@ -293,11 +293,28 @@ const goBack = () => {
   router.push('/home')
 }
 
+const normalizeMessage = (raw) => {
+  if (!raw) return null
+  const myId = authStore.user?.id
+  const senderId = raw.sender_id || raw.senderId
+  const isMine = String(senderId) === String(myId)
+  return {
+    ...raw,
+    id: raw.id,
+    senderId,
+    isMine,
+    createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
+    time: raw.time || formatEventClock(raw.created_at || raw.createdAt || Date.now())
+  }
+}
+
 const appendRemoteMessage = message => {
-  if (!message || messages.value.some(item => Number(item.id) === Number(message.id) && item.senderId)) return
-  messages.value.push(message)
+  const normalized = normalizeMessage(message)
+  if (!normalized) return
+  if (messages.value.some(item => Number(item.id) === Number(normalized.id))) return
+  messages.value.push(normalized)
   messages.value.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
-  if (message.senderId) lastRemoteMessageId = Math.max(lastRemoteMessageId, Number(message.id) || 0)
+  lastRemoteMessageId = Math.max(lastRemoteMessageId, Number(normalized.id) || 0)
   persistMessages()
   scrollToBottom()
 }
@@ -705,12 +722,13 @@ const persistMessages = () => {
 const loadRemoteMessages = async (replace = false) => {
   if (!hasPartner.value) return
   try {
-    const result = await ChatAPI.list(replace ? 0 : lastRemoteMessageId)
+    const result = await ChatAPI.list()
+    const remote = result.data || result.messages || []
     if (replace) {
       messages.value = []
       lastRemoteMessageId = 0
     }
-    result.messages?.forEach(appendRemoteMessage)
+    remote.forEach(appendRemoteMessage)
   } catch (error) {
     console.warn('聊天同步失败:', error.message)
   }
@@ -835,8 +853,8 @@ onMounted(async () => {
   try {
     const saved = JSON.parse(localStorage.getItem('loveDiary_chatMessages') || '[]')
     const demoTexts = new Set(['亲爱的，今天想我了吗？', '当然想啦！特别想你~', '晚上一起去吃饭吧', '好呀！想去吃什么？'])
-    messages.value = saved.filter(item => !demoTexts.has(item.content) && !(item.type === 'voice' && !item.content))
-    if (messages.value.length !== saved.length) persistMessages()
+    const local = saved.filter(item => !demoTexts.has(item.content) && !(item.type === 'voice' && !item.content))
+    local.forEach(appendRemoteMessage)
   } catch {}
   await loadRemoteMessages(true)
   await loadGuardianActivity()

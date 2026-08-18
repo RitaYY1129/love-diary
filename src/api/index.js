@@ -136,6 +136,7 @@ export const AnniversaryAPI = {
 }
 
 export const PhotoAPI = restApi('photos')
+
 function mapMoodOut(item) {
   return {
     mood: item.mood,
@@ -349,17 +350,16 @@ export const SharingAPI = {
     const data = await supabaseRest.get(`couple_shared_states?select=state&couple_id=eq.${cid}&module=eq.${module}`, token())
     return { payload: Array.isArray(data) && data[0] ? data[0].state : null }
   },
-  getState: async (module) => {
-    const cid = await getMyCoupleId()
-    if (!cid) return { payload: null }
-    const data = await supabaseRest.get(`couple_shared_states?select=state&couple_id=eq.${cid}&module=eq.${module}`, token())
-    return { payload: Array.isArray(data) && data[0] ? data[0].state : null }
-  },
   putState: async (module, payload) => {
     const cid = await getMyCoupleId()
     if (!cid) throw new Error('尚未绑定情侣')
-    const upsertBody = { couple_id: cid, module, state: payload }
-    const data = await supabaseRest.post(`couple_shared_states?select=*`, upsertBody, token(), { Prefer: 'resolution=merge-duplicates' })
+    // 先尝试更新已有记录；不存在则插入
+    const getRes = await SharingAPI.getState(module)
+    if (getRes.payload !== null) {
+      const data = await supabaseRest.patch(`couple_shared_states?couple_id=eq.${cid}&module=eq.${module}`, { state: payload, updated_at: new Date().toISOString() }, token())
+      return { payload: Array.isArray(data) && data[0] ? data[0].state : payload }
+    }
+    const data = await supabaseRest.post(`couple_shared_states?select=*`, { couple_id: cid, module, state: payload }, token())
     return { payload: Array.isArray(data) && data[0] ? data[0].state : payload }
   }
 }
