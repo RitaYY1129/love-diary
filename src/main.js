@@ -13,14 +13,9 @@ app.use(router)
 
 app.mount('#app')
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(error => {
-      console.warn('Service worker registration failed:', error)
-    })
-  })
-} else if (import.meta.env.DEV && 'serviceWorker' in navigator) {
-  // 内部测试始终使用最新源码，避免旧 PWA 缓存让页面看得到但交互还是旧版本。
+// 禁用 PWA Service Worker：旧版本缓存了错误 base 的 index.html，导致白屏。
+// 先彻底卸载所有已注册 Worker，保证后续访问永远加载最新线上版本。
+if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(registrations => {
     registrations.forEach(registration => registration.unregister())
   })

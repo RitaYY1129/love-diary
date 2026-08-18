@@ -16,9 +16,8 @@ function copyPwaIcons() {
 }
 
 export default defineConfig({
-  // 使用相对路径 ./，资源从当前目录加载，不依赖 URL 大小写与子目录名。
-  // Cloudflare Pages 等根域名部署可设 VITE_APP_BASE=/
-  base: process.env.VITE_APP_BASE || './',
+  // GitHub Pages 实际部署在 /love-diary/ 子目录；Cloudflare Pages 等根域名可设 VITE_APP_BASE=/
+  base: process.env.VITE_APP_BASE || '/love-diary/',
   plugins: [vue(), copyPwaIcons()],
   resolve: {
     alias: {

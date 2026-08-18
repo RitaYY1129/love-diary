@@ -13,6 +13,21 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="description" content="记录两个人的纪念日、日记、愿望和每一个甜蜜瞬间。" />
     <title>恋爱日记 - 专属你们的私密空间</title>
+    <!-- 清理旧 Service Worker：老版本缓存了错误 base 的 index.html，导致白屏。 -->
+    <script>
+      (function () {
+        if (!('serviceWorker' in navigator)) return
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          if (regs.length) {
+            regs.forEach(function (reg) { reg.unregister() })
+            if (!sessionStorage.getItem('sw_cleaned')) {
+              sessionStorage.setItem('sw_cleaned', '1')
+              location.reload()
+            }
+          }
+        })
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>
