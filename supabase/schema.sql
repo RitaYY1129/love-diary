@@ -5,24 +5,31 @@
 --  2. 由于是 anon 角色写入，这里统一关闭 RLS（DISABLE ROW LEVEL SECURITY），
 --     权限由应用层（本地账号 + couple_id）控制。若你之后接入 Supabase Auth，
 --     再按需开启 RLS 并配置 policy。
---  3. 在 Supabase SQL Editor 中全选执行本文件即可。
+--  3. 列名采用“前端用什么名字就用什么名字”的策略：
+--     前端/代码中 camelCase 的字段（如 countMode、customType、pinToHome）保留大小写；
+--     系统字段（created_at、updated_at 等）保持 snake_case。
+--  4. 在 Supabase SQL Editor 中全选执行本文件即可。
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
 -- profiles：用户资料
+--  字段与 src/api/supabase.js 中的 supabaseAuth 保持一致
 -- ----------------------------------------------------------------------------
 create table if not exists profiles (
-  id          uuid primary key,
-  phone       text unique,
-  username    text unique,
-  password    text,                       -- bcrypt 哈希
-  nickname    text,
-  avatar_url  text,
-  birthday    date,
-  invite_code text unique,
-  partner_id  uuid references profiles(id),
-  couple_id   uuid,
-  created_at  timestamptz default now()
+  id            uuid primary key,
+  identifier    text unique,                -- 手机号/用户名（统一小写）
+  username      text,                       -- 昵称/显示名
+  nickname      text,
+  password_hash text,                       -- bcrypt 哈希
+  avatar        text,
+  bio           text,
+  birthday      date,
+  theme         text default 'default',
+  profile_data  jsonb default '{}',
+  invite_code   text unique,
+  couple_id     uuid,
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
 );
 
 -- ----------------------------------------------------------------------------
@@ -63,6 +70,7 @@ create table if not exists wishes (
   owner_id     uuid,
   title        text not null,
   description  text,
+  target_date  date,
   completed    boolean default false,
   completed_at timestamptz,
   created_at   timestamptz default now(),
@@ -79,6 +87,7 @@ create table if not exists plans (
   description  text,
   date         date,
   time         time,
+  location     text,
   completed    boolean default false,
   completed_at timestamptz,
   created_at   timestamptz default now(),
@@ -87,21 +96,20 @@ create table if not exists plans (
 
 -- ----------------------------------------------------------------------------
 -- anniversaries：纪念日
---  注意字段名为 count_mode（snake_case），前端使用 camelCase 的 countMode，
---  PostgREST 会自动转换。
+--  字段与 src/views/Anniversary.vue 表单保持一致；camelCase 列用双引号包裹
 -- ----------------------------------------------------------------------------
 create table if not exists anniversaries (
-  id           uuid primary key default gen_random_uuid(),
-  owner_id     uuid,
-  title        text not null,
-  date         date not null,
-  type         text default 'custom',
-  emoji        text,
-  note         text,
-  count_mode   text default 'anniversary',  -- anniversary | age | daysPassed
-  repeat_year  boolean default false,
-  created_at   timestamptz default now(),
-  updated_at   timestamptz default now()
+  id            uuid primary key default gen_random_uuid(),
+  owner_id      uuid,
+  name          text not null,
+  date          date not null,
+  type          text default 'custom',
+  "customType"  text,
+  "countMode"   text default 'both',        -- both | countdown | elapsed
+  "repeatYearly" boolean default false,
+  "pinToHome"   boolean default false,      -- 是否置顶到首页面板
+  created_at    timestamptz default now(),
+  updated_at    timestamptz default now()
 );
 
 -- ----------------------------------------------------------------------------
@@ -121,13 +129,15 @@ create table if not exists photos (
 
 -- ----------------------------------------------------------------------------
 -- moods：心情
+--  字段与 src/views/Mood.vue 表单保持一致
 -- ----------------------------------------------------------------------------
 create table if not exists moods (
-  id          uuid primary key default gen_random_uuid(),
+  id          bigint generated always as identity primary key,
   owner_id    uuid,
-  score       integer not null,
-  tags        jsonb default '[]',
+  mood        text not null,
+  emoji       text,
   note        text,
+  date        date default now(),
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );

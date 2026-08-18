@@ -47,6 +47,9 @@
           </div>
           <div class="card-actions">
             <button @click="editAnniversary(anniversary)">编辑</button>
+            <button @click="togglePin(anniversary)">
+              {{ anniversary.pinToHome ? '取消首页显示' : '在首页显示' }}
+            </button>
             <button class="danger" @click="deleteAnniversary(anniversary.id)">删除</button>
           </div>
         </article>
@@ -111,6 +114,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AnniversaryAPI } from '@/api'
+import { pushSharedState } from '@/api/sharedState'
 
 const router = useRouter()
 const route = useRoute()
@@ -220,6 +224,18 @@ const deleteAnniversary = async id => {
   anniversaries.value = anniversaries.value.filter(item => item.id !== id)
   pushSharedState('anniversary', anniversaries.value)
   showToast('纪念日已删除')
+}
+const togglePin = async item => {
+  const willPin = !item.pinToHome
+  await (willPin ? AnniversaryAPI.setPinned(item.id) : AnniversaryAPI.unpin(item.id))
+  item.pinToHome = willPin
+  if (willPin) {
+    for (const a of anniversaries.value) {
+      if (a.id !== item.id) a.pinToHome = false
+    }
+  }
+  pushSharedState('anniversary', anniversaries.value)
+  showToast(willPin ? '已置顶到首页' : '已取消首页显示')
 }
 const loadAnniversaries = async () => {
   anniversaries.value = (await AnniversaryAPI.list()).data || []

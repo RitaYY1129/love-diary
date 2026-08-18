@@ -73,7 +73,24 @@ export const PlanAPI = {
     return Array.isArray(data) ? data[0] : data
   }
 }
-export const AnniversaryAPI = restApi('anniversaries')
+export const AnniversaryAPI = {
+  ...restApi('anniversaries'),
+  getPinned: async () => {
+    const uid = currentUserId()
+    const data = await supabaseRest.get(`anniversaries?select=*&owner_id=eq.${uid}&pin_to_home=eq.true&limit=1`, token())
+    return Array.isArray(data) && data[0] ? data[0] : null
+  },
+  setPinned: async (id) => {
+    const uid = currentUserId()
+    await supabaseRest.patch(`anniversaries?owner_id=eq.${uid}&pin_to_home=eq.true`, { pin_to_home: false }, token())
+    const data = await supabaseRest.patch(`anniversaries?id=eq.${id}&select=*`, { pin_to_home: true }, token())
+    return Array.isArray(data) ? data[0] : data
+  },
+  unpin: async (id) => {
+    const data = await supabaseRest.patch(`anniversaries?id=eq.${id}&select=*`, { pin_to_home: false }, token())
+    return Array.isArray(data) ? data[0] : data
+  }
+}
 export const PhotoAPI = restApi('photos')
 export const MoodAPI = {
   list: async () => {
@@ -98,11 +115,26 @@ export const MoodAPI = {
   },
   stats: async () => {
     const uid = currentUserId()
-    const data = await supabaseRest.get(`moods?select=score&owner_id=eq.${uid}`, token())
+    const data = await supabaseRest.get(`moods?select=mood,emoji&owner_id=eq.${uid}`, token())
     const arr = data || []
+    const moodScores = {
+      happy: 5, love: 5, excited: 5,
+      calm: 4,
+      tired: 3, confused: 3,
+      sad: 2, anxious: 2, lonely: 2,
+      angry: 1
+    }
+    const scores = arr.map(m => moodScores[m.mood] || 3)
+    const counts = {}
+    for (const m of arr) {
+      counts[m.mood] = (counts[m.mood] || 0) + 1
+    }
+    const topMood = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+    const topEntry = topMood ? arr.find(m => m.mood === topMood[0]) : null
     return {
       count: arr.length,
-      average: arr.length ? Math.round(arr.reduce((s, m) => s + (m.score || 0), 0) / arr.length * 10) / 10 : 0
+      average: scores.length ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length * 10) / 10 : 0,
+      topMood: topEntry ? { mood: topEntry.mood, emoji: topEntry.emoji } : null
     }
   }
 }

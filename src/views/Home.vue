@@ -30,8 +30,8 @@
           </button>
 
           <div class="love-days">
-            <span>我们在一起</span>
-            <strong>{{ loveDays }}</strong>
+            <span>{{ heroAnniversary.label }}</span>
+            <strong>{{ heroAnniversary.days }}</strong>
             <em>天</em>
           </div>
 
@@ -284,6 +284,7 @@ const diaryStore = useDiaryStore()
 const moodStore = useMoodStore()
 
 const anniversaries = ref([])
+const pinnedAnniversary = ref(null)
 const wishes = ref([])
 const plans = ref([])
 const fundData = ref({ totalAmount: 0, transactions: [] })
@@ -344,6 +345,19 @@ const loveDays = computed(() => {
   return Math.max(1, Math.floor((startOfToday() - start) / 86400000) + 1)
 })
 
+const heroAnniversary = computed(() => {
+  if (pinnedAnniversary.value?.date) {
+    const original = parseDate(pinnedAnniversary.value.date)
+    const today = startOfToday()
+    const days = Math.max(0, Math.floor((today - original) / 86400000))
+    return {
+      label: pinnedAnniversary.value.name || '我们的纪念日',
+      days
+    }
+  }
+  return { label: '我们在一起', days: loveDays.value }
+})
+
 const diaryCount = computed(() => diaryStore.entries?.length || 0)
 const allAlbumPhotos = computed(() => photoAlbums.value.flatMap(album => album.photos || []))
 const memoryCount = computed(() => allAlbumPhotos.value.length || photoRecords.value.reduce((total, record) => total + (record.photos?.length || 0), 0))
@@ -378,7 +392,7 @@ const streak = computed(() => checkinStore.streak || 0)
 const todayMood = computed(() => moodStore.getToday?.() || null)
 const todayMoodLabel = computed(() => {
   if (!todayMood.value) return '你今天心情怎么样？'
-  return todayMood.value.note || `今天的心情是 ${todayMood.value.score || 5} 分`
+  return todayMood.value.note || `今天的心情是 ${todayMood.value.emoji || '☺'} ${todayMood.value.mood || ''}`
 })
 const recentDiary = computed(() => diaryStore.entries?.[0] || null)
 const fundBalance = computed(() => Number(fundData.value.totalAmount) || 0)
@@ -635,12 +649,14 @@ onMounted(async () => {
     checkinStore.loadHistory?.(),
     checkinStore.loadStreak?.(),
     AnniversaryAPI.list(),
-    PlanAPI.list()
+    PlanAPI.list(),
+    AnniversaryAPI.getPinned()
   ]
 
   const results = await Promise.allSettled(tasks)
   if (results[4]?.status === 'fulfilled') anniversaries.value = results[4].value?.data || []
   if (results[5]?.status === 'fulfilled') plans.value = results[5].value?.data || []
+  if (results[6]?.status === 'fulfilled') pinnedAnniversary.value = results[6].value || null
 })
 
 onBeforeUnmount(() => clearInterval(homeCarouselTimer))
