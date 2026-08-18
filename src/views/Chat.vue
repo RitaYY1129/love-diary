@@ -695,7 +695,9 @@ const scrollToBottom = () => {
 const nowTime = () => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 function formatEventClock(timestamp) {
   if (!timestamp) return ''
-  return new Date(Number(timestamp)).toLocaleTimeString('zh-CN', {
+  const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp)
+  if (isNaN(date.getTime())) return ''
+  return date.toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false
@@ -1360,4 +1362,35 @@ onBeforeUnmount(() => {
   radial-gradient(circle at 50% 18%,color-mix(in srgb,var(--theme-primary) 42%,transparent),transparent 34%),
   linear-gradient(160deg,#4a303b,#21181e 70%)}
 .remote-video{position:absolute;z-index:0;inset:0;width:100%;height:100%;object-fit:cover;background:#21181e}.remote-video.audio-only{opacity:0;pointer-events:none}.local-video{position:absolute;z-index:4;top:calc(18px + env(safe-area-inset-top));right:15px;inset-inline-start:auto;width:92px;height:132px;border:2px solid rgba(255,255,255,.65);border-radius:17px;object-fit:cover;opacity:1;box-shadow:0 8px 25px rgba(0,0,0,.24)}.call-backdrop{position:absolute;z-index:1;inset:0;background:linear-gradient(180deg,rgba(24,15,20,.18),rgba(24,15,20,.1) 45%,rgba(18,12,16,.64))}.call-screen.video.active .call-partner-info{opacity:0}.call-partner-info{position:relative;z-index:3;margin:7vh 0 0;text-align:center;transition:.3s}.call-avatar{width:104px;height:104px;display:grid;place-items:center;margin:0 auto 17px;border:3px solid rgba(255,255,255,.72);box-shadow:0 12px 38px rgba(0,0,0,.22);color:#fff;font:600 28px Georgia}.call-name{font-size:21px}.call-status{margin-top:7px;font-size:11px}.call-timer{position:relative;z-index:3;margin:16px 0 0;font-size:14px;font-weight:500}.call-actions,.incoming-call-actions{position:absolute;z-index:5;right:0;bottom:calc(35px + env(safe-area-inset-bottom));left:0;display:flex;align-items:center;justify-content:center;gap:22px}.call-action-btn,.incoming-call-actions button{width:56px;height:56px;border:0;border-radius:50%;color:#fff}.call-action-btn:not(.end-btn){background:rgba(255,255,255,.2);backdrop-filter:blur(12px)}.call-action-btn.end-btn,.reject-call{background:#ef5961}.call-action-btn.end-btn span,.incoming-call-actions button span{font-size:27px;line-height:1}.incoming-call-actions{gap:65px}.incoming-call-actions button{position:relative}.incoming-call-actions .accept-call{background:#46c778}.incoming-call-actions small{position:absolute;top:64px;left:50%;color:#fff;font-size:9px;transform:translateX(-50%);white-space:nowrap}
+</style>
+
+<style scoped>
+/* 消息气泡美化：更圆润、时间更清晰 */
+.message-item {
+  margin-bottom: 16px;
+}
+.message-content {
+  padding: 11px 14px 22px !important;
+  border-radius: 18px 18px 18px 4px !important;
+  box-shadow: 0 4px 14px rgba(99, 60, 69, 0.07) !important;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.message-item.mine .message-content {
+  border-radius: 18px 18px 4px 18px !important;
+}
+.message-item.partner .message-content {
+  border-radius: 18px 18px 18px 4px !important;
+}
+.bubble-time {
+  right: 10px;
+  bottom: 5px;
+  font-size: 9px;
+  opacity: 0.62;
+  letter-spacing: 0.2px;
+}
+.message-item.mine .bubble-time {
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 0.8;
+}
 </style>
