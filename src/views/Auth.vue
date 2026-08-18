@@ -71,6 +71,7 @@
                 <input type="checkbox" v-model="rememberMe" />
                 <span class="text-gray-600">记住我</span>
               </label>
+              <button type="button" @click="openReset" class="text-primary">忘记密码？</button>
             </div>
           </div>
 
@@ -117,6 +118,21 @@
       </div>
     </div>
 
+    <div v-if="showReset" class="overlay show" @click.self="showReset = false">
+      <div class="overlay-box p-6">
+        <h3 class="text-lg font-bold mb-4">重置密码</h3>
+        <p class="text-gray-500 text-sm mb-4">输入手机号和新密码，无需原密码即可重置</p>
+        <label class="block text-sm font-medium text-gray-700 mb-2">手机号</label>
+        <input v-model="resetForm.identifier" type="text" class="form-input mb-4" placeholder="请输入注册时的手机号" />
+        <label class="block text-sm font-medium text-gray-700 mb-2">新密码</label>
+        <input v-model="resetForm.password" type="password" class="form-input mb-4" placeholder="请输入至少 6 位新密码" />
+        <button class="btn btn-primary btn-block" :disabled="resetSubmitting" @click="handleReset">
+          {{ resetSubmitting ? '加载中...' : '确认重置' }}
+        </button>
+        <button class="btn btn-secondary btn-block mt-3" @click="showReset = false">取消</button>
+      </div>
+    </div>
+
     <div :class="['toast', toast.show ? 'show' : '']">{{ toast.message }}</div>
   </div>
 </template>
@@ -138,6 +154,9 @@ const mode = ref('login')
 const rememberMe = ref(false)
 const showPartnerBind = ref(false)
 const partnerCode = ref('')
+const showReset = ref(false)
+const resetSubmitting = ref(false)
+const resetForm = ref({ identifier: '', password: '' })
 const isSubmitting = ref(false)
 const agreedToTerms = ref(false)
 const showPassword = ref(false)
@@ -237,6 +256,30 @@ const handleSubmit = async () => {
     await router.replace('/home')
   } else {
     showToast(result.message)
+  }
+}
+
+const openReset = () => {
+  resetForm.value = { identifier: form.value.identifier, password: '' }
+  showReset.value = true
+}
+
+const handleReset = async () => {
+  if (!/^1[3-9]\d{9}$/.test(resetForm.value.identifier.trim())) {
+    showToast('请输入正确的手机号')
+    return
+  }
+  if (resetForm.value.password.length < 6) {
+    showToast('新密码至少需要 6 位')
+    return
+  }
+  resetSubmitting.value = true
+  const result = await authStore.resetPassword(resetForm.value.identifier.trim(), resetForm.value.password)
+  resetSubmitting.value = false
+  showToast(result.message)
+  if (result.ok) {
+    showReset.value = false
+    form.value.identifier = resetForm.value.identifier
   }
 }
 

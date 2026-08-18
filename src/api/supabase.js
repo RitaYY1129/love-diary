@@ -127,6 +127,25 @@ export const supabaseAuth = {
     return { ok: false, message: '微信登录暂未配置' }
   },
 
+  async resetPassword(identifier, newPassword) {
+    const idVal = normalize(identifier)
+    try {
+      const rows = await request(`/rest/v1/profiles?select=*&identifier=eq.${encodeURIComponent(idVal)}`)
+      const p = Array.isArray(rows) ? rows[0] : null
+      if (!p) return { ok: false, message: '该手机号尚未注册，请先注册' }
+      const password_hash = await bcrypt.hash(newPassword, 10)
+      await request(`/rest/v1/profiles?identifier=eq.${encodeURIComponent(idVal)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ password_hash }),
+        headers: { Prefer: 'return=representation' }
+      })
+      return { ok: true, message: '密码已重置，请用新密码登录' }
+    } catch (e) {
+      console.error('resetPassword error:', e)
+      return { ok: false, message: e.message || '重置失败，请检查网络或 Supabase 配置' }
+    }
+  },
+
   async getProfile() {
     const raw = localStorage.getItem('loveDiary_user')
     if (!raw) return { ok: false, message: '未登录' }
