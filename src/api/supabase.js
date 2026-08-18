@@ -5,12 +5,22 @@
 // ============================================================================
 import bcrypt from 'bcryptjs'
 
-const url = String(import.meta.env.VITE_SUPABASE_URL || 'https://grwdgdyduvewuxkibajh.supabase.co').replace(/\/$/, '')
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_p0BdXWxDe3fczsmHnd3NMQ_oEzTqE82'
+const url = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '')
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+
+// Supabase anon key 是一个 JWT（三段式），其他字符串 PostgREST 会报 "Expected 3 parts in JWT"
+const isJwt = (v) => typeof v === 'string' && v.split('.').length === 3 && v.split('.').every(Boolean)
 
 const configured = () => {
   if (!url || !anonKey) {
     throw new Error('尚未配置 Supabase。请设置 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY。')
+  }
+  if (!isJwt(anonKey)) {
+    throw new Error(
+      'VITE_SUPABASE_ANON_KEY 不是有效的 JWT。' +
+      '注意：Supabase 新版 publishable key（sb_publishable_...）不能用于此处，' +
+      '请从 Project Settings > API 复制真正的 anon / public key（eyJ... 三段式）。'
+    )
   }
 }
 
@@ -19,15 +29,16 @@ const request = async (path, options = {}, accessToken = null) => {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000) // 15 秒超时，避免一直转圈
   try {
+    const headers = {
+      apikey: anonKey,
+      Authorization: `Bearer ${accessToken && isJwt(accessToken) ? accessToken : anonKey}`,
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {})
+    }
     const response = await fetch(`${url}${path}`, {
       ...options,
       signal: controller.signal,
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${accessToken || anonKey}`,
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.headers || {})
-      }
+      headers
     })
     clearTimeout(timer)
     const text = await response.text()
