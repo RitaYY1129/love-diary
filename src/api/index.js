@@ -305,6 +305,7 @@ export const ChatAPI = {
     const cid = await getMyCoupleId()
     if (!cid) throw new Error('尚未绑定情侣，无法聊天')
     const data = await supabaseRest.post('chat_messages?select=*', { couple_id: cid, sender_id: currentUserId(), type, content, metadata }, token())
+    if (!data) throw new Error('消息发送失败：服务器未返回数据')
     return Array.isArray(data) ? data[0] : data
   },
   subscribe: (onInsert) => {

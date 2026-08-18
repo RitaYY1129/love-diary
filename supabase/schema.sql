@@ -96,7 +96,7 @@ create table if not exists plans (
 
 -- ----------------------------------------------------------------------------
 -- anniversaries：纪念日
---  字段与 src/views/Anniversary.vue 表单保持一致；camelCase 列用双引号包裹
+--  字段与 src/views/Anniversary.vue 表单保持对应（前端 camelCase 映射到 DB snake_case）
 -- ----------------------------------------------------------------------------
 create table if not exists anniversaries (
   id            uuid primary key default gen_random_uuid(),
@@ -104,10 +104,10 @@ create table if not exists anniversaries (
   name          text not null,
   date          date not null,
   type          text default 'custom',
-  "customType"  text,
-  "countMode"   text default 'both',        -- both | countdown | elapsed
-  "repeatYearly" boolean default false,
-  "pinToHome"   boolean default false,      -- 是否置顶到首页面板
+  custom_type   text,
+  count_mode    text default 'both',        -- both | countdown | elapsed
+  repeat_yearly boolean default false,
+  pin_to_home   boolean default false,      -- 是否置顶到首页面板
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );

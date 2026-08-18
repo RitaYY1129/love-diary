@@ -308,11 +308,11 @@ const sendMessage = async () => {
   const content = inputText.value.trim()
   inputText.value = ''
   try {
-    const result = await ChatAPI.send('text', content)
-    appendRemoteMessage(result.message)
+    const message = await ChatAPI.send('text', content)
+    appendRemoteMessage(message)
   } catch (error) {
     inputText.value = content
-    alert(error.message || '消息发送失败')
+    alert(error?.message || '消息发送失败')
   }
 }
 
@@ -342,9 +342,9 @@ const startRecording = async () => {
       const reader = new FileReader()
       reader.onload = async event => {
         try {
-          const result = await ChatAPI.send('voice', event.target.result, { duration, transcript: voiceTranscript })
-          appendRemoteMessage({ ...result.message, isPlaying: false })
-        } catch (error) { alert(error.message || '语音发送失败') }
+          const message = await ChatAPI.send('voice', event.target.result, { duration, transcript: voiceTranscript })
+          appendRemoteMessage({ ...message, isPlaying: false })
+        } catch (error) { alert(error?.message || '语音发送失败') }
       }
       reader.readAsDataURL(blob)
       recordingDuration.value = 0
@@ -423,9 +423,9 @@ const selectImage = () => {
     if (!file) return
     try {
       const content = await compressChatImage(file)
-      const result = await ChatAPI.send('image', content)
-      appendRemoteMessage(result.message)
-    } catch (error) { alert(error.message || '照片发送失败') }
+      const message = await ChatAPI.send('image', content)
+      appendRemoteMessage(message)
+    } catch (error) { alert(error?.message || '照片发送失败') }
   }
   input.click()
 }
@@ -439,9 +439,9 @@ const selectVideo = () => {
     const reader = new FileReader()
     reader.onload = async e => {
       try {
-        const result = await ChatAPI.send('video', e.target.result, { fileName: file.name })
-        appendRemoteMessage(result.message)
-      } catch (error) { alert(error.message || '视频发送失败') }
+        const message = await ChatAPI.send('video', e.target.result, { fileName: file.name })
+        appendRemoteMessage(message)
+      } catch (error) { alert(error?.message || '视频发送失败') }
     }
     reader.readAsDataURL(file)
   }
@@ -453,9 +453,9 @@ const sendLocation = () => {
   navigator.geolocation.getCurrentPosition(async position => {
     try {
       const metadata = { latitude: position.coords.latitude, longitude: position.coords.longitude, address: '我的当前位置' }
-      const result = await ChatAPI.send('location', '我的当前位置', metadata)
-      appendRemoteMessage(result.message)
-    } catch (error) { alert(error.message || '位置发送失败') }
+      const message = await ChatAPI.send('location', '我的当前位置', metadata)
+      appendRemoteMessage(message)
+    } catch (error) { alert(error?.message || '位置发送失败') }
   }, () => alert('请允许定位权限后重试'), { enableHighAccuracy: true, timeout: 10000 })
 }
 const openLocation = message => window.open(`https://uri.amap.com/marker?position=${message.longitude},${message.latitude}&name=${encodeURIComponent(message.address || '共享位置')}`, '_blank')
