@@ -73,24 +73,68 @@ export const PlanAPI = {
     return Array.isArray(data) ? data[0] : data
   }
 }
+
+function mapAnniversaryOut(item) {
+  return {
+    name: item.name,
+    date: item.date,
+    type: item.type,
+    custom_type: item.customType,
+    count_mode: item.countMode,
+    repeat_yearly: item.repeatYearly,
+    pin_to_home: item.pinToHome
+  }
+}
+
+function mapAnniversaryIn(row) {
+  if (!row) return row
+  return {
+    ...row,
+    customType: row.custom_type,
+    countMode: row.count_mode,
+    repeatYearly: row.repeat_yearly,
+    pinToHome: row.pin_to_home
+  }
+}
+
 export const AnniversaryAPI = {
-  ...restApi('anniversaries'),
+  list: async (query = {}) => {
+    const res = await restApi('anniversaries').list(query)
+    return { data: (res.data || []).map(mapAnniversaryIn) }
+  },
+  get: async (id) => {
+    const data = await supabaseRest.get(`anniversaries?select=*&id=eq.${id}`, token())
+    return mapAnniversaryIn(Array.isArray(data) ? data[0] : data)
+  },
+  create: async (item) => {
+    const data = await supabaseRest.post('anniversaries?select=*', withOwner(mapAnniversaryOut(item)), token())
+    return mapAnniversaryIn(Array.isArray(data) ? data[0] : data)
+  },
+  update: async (id, item) => {
+    const data = await supabaseRest.patch(`anniversaries?id=eq.${id}&select=*`, mapAnniversaryOut(item), token())
+    return mapAnniversaryIn(Array.isArray(data) ? data[0] : data)
+  },
+  delete: async (id) => {
+    await supabaseRest.delete(`anniversaries?id=eq.${id}`, token())
+    return { success: true }
+  },
   getPinned: async () => {
     const uid = currentUserId()
     const data = await supabaseRest.get(`anniversaries?select=*&owner_id=eq.${uid}&pin_to_home=eq.true&limit=1`, token())
-    return Array.isArray(data) && data[0] ? data[0] : null
+    return mapAnniversaryIn(Array.isArray(data) && data[0] ? data[0] : null)
   },
   setPinned: async (id) => {
     const uid = currentUserId()
     await supabaseRest.patch(`anniversaries?owner_id=eq.${uid}&pin_to_home=eq.true`, { pin_to_home: false }, token())
     const data = await supabaseRest.patch(`anniversaries?id=eq.${id}&select=*`, { pin_to_home: true }, token())
-    return Array.isArray(data) ? data[0] : data
+    return mapAnniversaryIn(Array.isArray(data) ? data[0] : data)
   },
   unpin: async (id) => {
     const data = await supabaseRest.patch(`anniversaries?id=eq.${id}&select=*`, { pin_to_home: false }, token())
-    return Array.isArray(data) ? data[0] : data
+    return mapAnniversaryIn(Array.isArray(data) ? data[0] : data)
   }
 }
+
 export const PhotoAPI = restApi('photos')
 export const MoodAPI = {
   list: async () => {

@@ -202,43 +202,65 @@ const saveAnniversary = async () => {
   if (!form.value.date) return showToast('请选择日期')
   if (form.value.type === 'custom' && !form.value.customType.trim()) return showToast('请输入自定义类型')
   saving.value = true
-  const isEditing = !!editingAnniversary.value
-  const payload = { ...form.value, name: form.value.name.trim() }
-  const saved = editingAnniversary.value
-    ? await AnniversaryAPI.update(editingAnniversary.value.id, payload)
-    : await AnniversaryAPI.create(payload)
-  if (saved) {
+  try {
+    const isEditing = !!editingAnniversary.value
+    const payload = { ...form.value, name: form.value.name.trim() }
+    const saved = isEditing
+      ? await AnniversaryAPI.update(editingAnniversary.value.id, payload)
+      : await AnniversaryAPI.create(payload)
+    if (!saved) throw new Error('保存失败')
     const index = anniversaries.value.findIndex(item => item.id === saved.id)
     if (index >= 0) anniversaries.value[index] = saved
     else anniversaries.value.push(saved)
     localStorage.setItem('loveDiary_anniversaries', JSON.stringify(anniversaries.value))
-    pushSharedState('anniversary', anniversaries.value)
+    await pushSharedState('anniversary', anniversaries.value)
     closeCreateModal()
     showToast(isEditing ? '纪念日已更新' : '纪念日已添加')
+  } catch (e) {
+    console.error('saveAnniversary error:', e)
+    showToast(e.message || '保存失败，请重试')
+  } finally {
+    saving.value = false
   }
-  saving.value = false
 }
 const deleteAnniversary = async id => {
   if (!confirm('确定删除这个纪念日吗？')) return
-  await AnniversaryAPI.delete(id)
-  anniversaries.value = anniversaries.value.filter(item => item.id !== id)
-  pushSharedState('anniversary', anniversaries.value)
-  showToast('纪念日已删除')
+  try {
+    await AnniversaryAPI.delete(id)
+    anniversaries.value = anniversaries.value.filter(item => item.id !== id)
+    await pushSharedState('anniversary', anniversaries.value)
+    showToast('纪念日已删除')
+  } catch (e) {
+    console.error('deleteAnniversary error:', e)
+    showToast(e.message || '删除失败')
+  }
 }
 const togglePin = async item => {
   const willPin = !item.pinToHome
-  await (willPin ? AnniversaryAPI.setPinned(item.id) : AnniversaryAPI.unpin(item.id))
-  item.pinToHome = willPin
-  if (willPin) {
-    for (const a of anniversaries.value) {
-      if (a.id !== item.id) a.pinToHome = false
+  try {
+    const updated = willPin
+      ? await AnniversaryAPI.setPinned(item.id)
+      : await AnniversaryAPI.unpin(item.id)
+    if (!updated) throw new Error('操作失败')
+    item.pinToHome = willPin
+    if (willPin) {
+      for (const a of anniversaries.value) {
+        if (a.id !== item.id) a.pinToHome = false
+      }
     }
+    await pushSharedState('anniversary', anniversaries.value)
+    showToast(willPin ? '已置顶到首页' : '已取消首页显示')
+  } catch (e) {
+    console.error('togglePin error:', e)
+    showToast(e.message || '置顶失败，请重试')
   }
-  pushSharedState('anniversary', anniversaries.value)
-  showToast(willPin ? '已置顶到首页' : '已取消首页显示')
 }
 const loadAnniversaries = async () => {
-  anniversaries.value = (await AnniversaryAPI.list()).data || []
+  try {
+    anniversaries.value = (await AnniversaryAPI.list()).data || []
+  } catch (e) {
+    console.error('loadAnniversaries error:', e)
+  }
 }
 
 onMounted(() => { loadAnniversaries(); timer = setInterval(() => { clock.value = Date.now() }, 1000) })

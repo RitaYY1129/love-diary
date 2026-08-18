@@ -183,40 +183,54 @@ export const supabaseAuth = {
   },
 
   async bindPartner(inviteCode) {
-    const raw = localStorage.getItem('loveDiary_user')
-    if (!raw) return { ok: false, message: '未登录' }
-    const local = JSON.parse(raw)
-    const rows = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`)
-    const me = Array.isArray(rows) ? rows[0] : null
-    if (!me) return { ok: false, message: '账号不存在' }
-    if (me.couple_id) return { ok: false, message: '你已经绑定了情侣' }
-    const partners = await request(`/rest/v1/profiles?select=*&invite_code=eq.${encodeURIComponent(String(inviteCode).trim())}`)
-    const partner = Array.isArray(partners) ? partners[0] : null
-    if (!partner) return { ok: false, message: '邀请码无效' }
-    if (partner.couple_id) return { ok: false, message: '对方已经绑定了其他人' }
-    const coupleId = crypto.randomUUID()
-    // 批量更新两人到同一情侣组
-    await request(`/rest/v1/profiles?select=id&id=in.(${me.id},${partner.id})`, {
-      method: 'PATCH',
-      body: JSON.stringify({ couple_id: coupleId }),
-      headers: { Prefer: 'return=minimal' }
-    })
-    return this.getProfile()
+    try {
+      const raw = localStorage.getItem('loveDiary_user')
+      if (!raw) return { ok: false, message: '未登录' }
+      const local = JSON.parse(raw)
+      const rows = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`)
+      const me = Array.isArray(rows) ? rows[0] : null
+      if (!me) return { ok: false, message: '账号不存在' }
+      if (me.couple_id) return { ok: false, message: '你已经绑定了情侣' }
+      const partners = await request(`/rest/v1/profiles?select=*&invite_code=eq.${encodeURIComponent(String(inviteCode).trim())}`)
+      const partner = Array.isArray(partners) ? partners[0] : null
+      if (!partner) return { ok: false, message: '邀请码无效' }
+      if (partner.couple_id) return { ok: false, message: '对方已经绑定了其他人' }
+      const coupleId = crypto.randomUUID()
+      // UUID 字符串需加双引号，否则 PostgREST 解析失败
+      await request(`/rest/v1/profiles?select=id&id=in.("${me.id}","${partner.id}")`, {
+        method: 'PATCH',
+        body: JSON.stringify({ couple_id: coupleId }),
+        headers: { Prefer: 'return=minimal' }
+      })
+      const profileResult = await supabaseAuth.getProfile()
+      if (!profileResult.ok) return { ok: false, message: '绑定成功，但刷新用户信息失败' }
+      return { ok: true, message: '绑定成功', user: profileResult.user }
+    } catch (e) {
+      console.error('bindPartner error:', e)
+      return { ok: false, message: e.message || '绑定失败' }
+    }
   },
 
   async unbindPartner() {
-    const raw = localStorage.getItem('loveDiary_user')
-    if (!raw) return { ok: false, message: '未登录' }
-    const local = JSON.parse(raw)
-    const rows = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`)
-    const me = Array.isArray(rows) ? rows[0] : null
-    if (!me || !me.couple_id) return { ok: false, message: '尚未绑定' }
-    await request(`/rest/v1/profiles?select=id&couple_id=eq.${me.couple_id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ couple_id: null }),
-      headers: { Prefer: 'return=minimal' }
-    })
-    return this.getProfile()
+    try {
+      const raw = localStorage.getItem('loveDiary_user')
+      if (!raw) return { ok: false, message: '未登录' }
+      const local = JSON.parse(raw)
+      const rows = await request(`/rest/v1/profiles?select=*&id=eq.${local.id}`)
+      const me = Array.isArray(rows) ? rows[0] : null
+      if (!me || !me.couple_id) return { ok: false, message: '尚未绑定' }
+      await request(`/rest/v1/profiles?select=id&couple_id=eq.${me.couple_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ couple_id: null }),
+        headers: { Prefer: 'return=minimal' }
+      })
+      const profileResult = await supabaseAuth.getProfile()
+      if (!profileResult.ok) return { ok: false, message: '解绑成功，但刷新用户信息失败' }
+      return { ok: true, message: '解绑成功', user: profileResult.user }
+    } catch (e) {
+      console.error('unbindPartner error:', e)
+      return { ok: false, message: e.message || '解绑失败' }
+    }
   }
 }
 

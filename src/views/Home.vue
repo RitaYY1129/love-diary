@@ -47,18 +47,16 @@
           <span>{{ partnerName }}</span>
         </div>
 
-        <div v-if="heroSettings.showStats" class="hero-stats">
-          <div>
-            <strong>{{ loveValue }}</strong>
-            <span>恋爱值</span>
+        <div v-if="heroSettings.showStats" class="hero-countdown" @click="go('/anniversary')">
+          <div class="countdown-header">
+            <small>下一段值得期待的日子</small>
+            <strong>{{ pinnedCountdown.name || '置顶纪念日' }}</strong>
           </div>
-          <div>
-            <strong>{{ diaryCount }}</strong>
-            <span>篇日记</span>
-          </div>
-          <div>
-            <strong>{{ memoryCount }}</strong>
-            <span>份回忆</span>
+          <div class="countdown-grid-home">
+            <div><strong>{{ pinnedCountdown.days }}</strong><span>天</span></div>
+            <div><strong>{{ pinnedCountdown.hours }}</strong><span>时</span></div>
+            <div><strong>{{ pinnedCountdown.minutes }}</strong><span>分</span></div>
+            <div><strong>{{ pinnedCountdown.seconds }}</strong><span>秒</span></div>
           </div>
         </div>
       </section>
@@ -187,7 +185,7 @@
       </section>
 
       <section class="love-message">
-        <span>“</span>
+        <span>"</span>
         <p>爱不是盛大的宣言，是每个普通日子里都有彼此。</p>
         <small>OUR LITTLE LOVE STORY</small>
       </section>
@@ -297,6 +295,8 @@ const toast = ref('')
 const installPrompt = ref(null)
 const showHeroCustomizer = ref(false)
 const heroImageInput = ref(null)
+const now = ref(Date.now())
+let countdownTimer = null
 
 const defaultHeroSettings = () => ({
   colorFrom: '#f38aa9',
@@ -374,6 +374,39 @@ const startHomeCarousel = () => {
 }
 const loveValue = computed(() => {
   return 5200 + loveDays.value * 3 + diaryCount.value * 18 + checkinStore.history.length * 12
+})
+
+const pinnedCountdown = computed(() => {
+  const pinned = pinnedAnniversary.value
+  if (!pinned || !pinned.date) {
+    return { name: '暂无置顶纪念日', days: '0', hours: '00', minutes: '00', seconds: '00' }
+  }
+  const original = parseDate(pinned.date)
+  const today = new Date(now.value)
+  today.setHours(0, 0, 0, 0)
+  let target = new Date(original)
+  target.setHours(0, 0, 0, 0)
+  if (pinned.repeatYearly) {
+    target.setFullYear(today.getFullYear())
+    if (target < today) target.setFullYear(today.getFullYear() + 1)
+  }
+  let diff = target.getTime() - now.value
+  if (diff < 0) diff = 0
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  diff -= days * 1000 * 60 * 60 * 24
+  const hours = Math.floor(diff / (1000 * 60 * 60))
+  diff -= hours * 1000 * 60 * 60
+  const minutes = Math.floor(diff / (1000 * 60))
+  diff -= minutes * 1000 * 60
+  const seconds = Math.floor(diff / 1000)
+  const pad = n => String(n).padStart(2, '0')
+  return {
+    name: pinned.name,
+    days: String(days),
+    hours: pad(hours),
+    minutes: pad(minutes),
+    seconds: pad(seconds)
+  }
 })
 
 const greeting = computed(() => {
@@ -574,8 +607,8 @@ async function installApp() {
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent)
   showToast(
     isIos
-      ? '请点击 Safari 的分享按钮，再选择“添加到主屏幕”'
-      : '请打开浏览器菜单，选择“安装应用”或“添加到主屏幕”',
+      ? '请点击 Safari 的分享按钮，再选择"添加到主屏幕"'
+      : '请打开浏览器菜单，选择"安装应用"或"添加到主屏幕"',
     4200
   )
 }
@@ -640,6 +673,7 @@ onMounted(async () => {
   }
   activeHomePhotoIndex.value = 0
   startHomeCarousel()
+  countdownTimer = window.setInterval(() => { now.value = Date.now() }, 1000)
   wishes.value = readLocal('loveDiary_bucketList')
   if (!wishes.value.length) wishes.value = readLocal('loveDiary_wishes')
 
@@ -659,9 +693,9 @@ onMounted(async () => {
   if (results[6]?.status === 'fulfilled') pinnedAnniversary.value = results[6].value || null
 })
 
-onBeforeUnmount(() => clearInterval(homeCarouselTimer))
-
 onBeforeUnmount(() => {
+  clearInterval(homeCarouselTimer)
+  clearInterval(countdownTimer)
   window.removeEventListener('beforeinstallprompt', captureInstallPrompt)
 })
 </script>
@@ -862,36 +896,59 @@ button {
   opacity: .72;
 }
 
-.hero-stats {
+.hero-countdown {
   position: absolute;
   right: 17px;
   bottom: 16px;
   left: 17px;
   z-index: 2;
   display: grid;
-  padding: 13px 8px;
+  padding: 13px 16px;
   border: 1px solid rgba(255, 255, 255, .2);
   border-radius: 18px;
-  grid-template-columns: repeat(3, 1fr);
   background: rgba(122, 31, 65, .13);
   backdrop-filter: blur(12px);
+  cursor: pointer;
 }
 
-.hero-stats div {
+.countdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.countdown-header small {
+  font-size: 10px;
+  opacity: .78;
+}
+
+.countdown-header strong {
+  font-size: 13px;
+}
+
+.countdown-grid-home {
   display: grid;
+  grid-template-columns: repeat(4, 1fr);
   text-align: center;
+}
+
+.countdown-grid-home div {
+  display: grid;
   gap: 2px;
 }
 
-.hero-stats div + div {
+.countdown-grid-home div + div {
   border-left: 1px solid rgba(255, 255, 255, .2);
 }
 
-.hero-stats strong {
-  font-size: 16px;
+.countdown-grid-home strong {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
 }
 
-.hero-stats span {
+.countdown-grid-home span {
   font-size: 10px;
   opacity: .78;
 }
@@ -1499,9 +1556,10 @@ button {
 .love-hero .love-days em,
 .love-hero .couple-names,
 .love-hero .couple-names i,
-.love-hero .hero-stats,
-.love-hero .hero-stats strong,
-.love-hero .hero-stats span {
+.love-hero .hero-countdown,
+.love-hero .hero-countdown strong,
+.love-hero .hero-countdown span,
+.love-hero .hero-countdown small {
   color: var(--hero-text-color, #fff) !important;
 }
 .hero-customize-button {
