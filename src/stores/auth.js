@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { AuthAPI } from '@/api'
-import { resetPassword as resetPasswordApi } from '@/api/supabase'
+import { supabaseAuth } from '@/api/supabase'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -104,7 +104,7 @@ export const useAuthStore = defineStore('auth', {
 
     // ---- 重置密码（不需要原密码，按手机号直接修改）----
     async resetPassword(identifier, newPassword) {
-      const result = await resetPasswordApi(identifier, newPassword)
+      const result = await supabaseAuth.resetPassword(identifier, newPassword)
       if (result.ok) {
         return { ok: true, message: result.message || '密码已重置，请用新密码登录' }
       }
