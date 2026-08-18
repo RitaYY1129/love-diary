@@ -155,7 +155,8 @@ create table if not exists checkins (
 );
 
 -- ----------------------------------------------------------------------------
--- locations：位置共享
+-- locations：位置共享 / 足迹
+--  记录每次定位，按 couple_id + owner_id 可查看双方位置和停留时长
 -- ----------------------------------------------------------------------------
 create table if not exists locations (
   id          bigint generated always as identity primary key,
@@ -164,6 +165,10 @@ create table if not exists locations (
   latitude    double precision not null,
   longitude   double precision not null,
   address     text,
+  name        text,                         -- 地点名称/备注
+  icon        text default '📍',            -- 图标
+  duration    integer default 0,            -- 在该地点停留的分钟数
+  started_at  timestamptz default now(),    -- 进入该地点的时间
   created_at  timestamptz default now()
 );
 

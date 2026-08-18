@@ -50,30 +50,30 @@
 
           <div class="partner-info">
             <div class="avatar-wrapper">
-              <div class="partner-avatar">👩</div>
+              <div class="partner-avatar">{{ partnerNickname.charAt(0) }}</div>
               <span class="online-dot"></span>
             </div>
             <div class="partner-detail">
-              <div class="partner-name">{{ authStore.user?.partner?.nickname || '小可爱' }}</div>
+              <div class="partner-name">{{ partnerNickname }}</div>
               <div class="partner-status">
                 <span class="status-dot"></span>
-                在线 · 在家
+                {{ partnerLocation?.address || '暂无位置' }}
               </div>
             </div>
-            <div class="update-time">刚更新</div>
+            <div class="update-time">{{ partnerStatus }}</div>
           </div>
 
           <div class="location-info">
             <div class="location-icon">📍</div>
             <div class="location-detail">
               <div class="location-name">{{ currentLocation.address }}</div>
-              <div class="location-meta">距离你 2.3km · 15分钟</div>
+              <div class="location-meta">{{ myNickname }} · 当前位置</div>
             </div>
             <button class="nav-btn" @click="openNavi">导航</button>
           </div>
 
           <div class="location-meta-info">
-            <span class="meta-item">📅 今天 18:30</span>
+            <span class="meta-item">📍 点击刷新获取最新位置</span>
             <span class="meta-divider">|</span>
             <span class="meta-item">⏱️ 1.5小时</span>
           </div>
@@ -98,10 +98,15 @@
           </div>
           
           <div class="history-list">
+            <div v-if="historyRecords.length === 0" class="empty-text">暂无足迹记录</div>
             <div v-for="(item, index) in historyRecords" :key="index" class="history-item">
               <div class="history-icon">{{ item.icon }}</div>
               <div class="history-info">
-                <div class="history-name">{{ item.name }}</div>
+                <div class="history-name">
+                  <span v-if="item.isPartner" class="owner-badge partner">TA</span>
+                  <span v-else class="owner-badge me">我</span>
+                  {{ item.name }}
+                </div>
                 <div class="history-time">{{ item.time }}</div>
               </div>
               <span v-if="item.current" class="current-badge">当前</span>
@@ -116,21 +121,17 @@
           </div>
           
           <div class="checkin-list">
+            <div v-if="checkinRecords.length === 0" class="empty-text">暂无打卡记录</div>
             <div v-for="(item, index) in checkinRecords" :key="index" class="checkin-item">
               <div class="checkin-icon">📍</div>
               <div class="checkin-info">
                 <div class="checkin-name">{{ item.name }}</div>
                 <div class="checkin-time">{{ item.time }}</div>
               </div>
-              <span class="checkin-points">+{{ item.points }}</span>
+              <span class="checkin-points">+10</span>
             </div>
           </div>
         </div>
-
-        <div class="safety-note">
-            <span class="note-icon">🔒</span>
-            <span class="note-text">位置信息仅双方可见，可随时关闭共享</span>
-          </div>
 
         <button 
           @click="getCurrentLocation" 
@@ -141,6 +142,11 @@
           <span v-else>🔄</span>
           {{ isGettingLocation ? '定位中...' : '刷新定位' }}
         </button>
+
+        <div class="safety-note">
+            <span class="note-icon">🔒</span>
+            <span class="note-text">位置信息仅双方可见，可随时关闭共享</span>
+          </div>
       </div>
     </div>
 
@@ -182,6 +188,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { LocationAPI } from '@/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -203,21 +210,12 @@ const isGettingLocation = ref(false)
 const currentLocation = ref({
   lat: 39.9902,
   lng: 116.4735,
-  address: '北京市朝阳区望京花园'
+  address: '正在定位...'
 })
 const showMapSelector = ref(false)
-
-const historyRecords = ref([
-  { icon: '🍲', name: '海底捞（望京店）', time: '今天 18:30 · 1.5小时', current: false },
-  { icon: '🎬', name: '万达影城', time: '昨天 20:00 · 2小时', current: false },
-  { icon: '🏬', name: '望京凯德MALL', time: '3天前 · 3小时', current: false },
-  { icon: '🌳', name: '望京公园', time: '本周 · 45分钟', current: true }
-])
-
-const checkinRecords = ref([
-  { name: '海底捞（望京店）', time: '今天 18:30', points: 10 },
-  { name: '万达影城', time: '昨天 20:00', points: 10 }
-])
+const partnerLocation = ref(null)
+const historyRecords = ref([])
+const checkinRecords = ref([])
 
 const mapApps = ref([
   { name: '高德地图', icon: '🗺️', scheme: 'amap', package: 'com.autonavi.minimap' },
@@ -238,71 +236,51 @@ const showToast = (message) => {
   }, 2000)
 }
 
-const goBack = () => {
-  router.back()
-}
+const goBack = () => router.back()
 
 const navigate = (path) => {
-  if (path !== currentPath.value) {
-    router.push(path)
-  }
+  if (path !== currentPath.value) router.push(path)
 }
 
-const goToBindPartner = () => {
-  router.push('/me')
+const goToBindPartner = () => router.push('/me')
+
+const partnerNickname = computed(() => authStore.user?.partner?.nickname || 'TA')
+const myNickname = computed(() => authStore.user?.nickname || '我')
+
+const partnerStatus = computed(() => {
+  if (!partnerLocation.value) return '暂无位置'
+  const updated = new Date(partnerLocation.value.created_at)
+  const diff = Math.floor((Date.now() - updated.getTime()) / 60000)
+  if (diff < 1) return '刚刚更新'
+  if (diff < 60) return `${diff}分钟前`
+  return `${Math.floor(diff / 60)}小时前`
+})
+
+const formatTime = (iso) => {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const toggleSharing = () => {
-  if (locationSharing.value) {
-    showToast('已开启位置共享')
-  } else {
-    showToast('已关闭位置共享')
-  }
-}
-
-const getCurrentLocation = () => {
-  if (!navigator.geolocation) {
-    showToast('您的浏览器不支持GPS定位')
-    return
-  }
-
-  isGettingLocation.value = true
-  
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const { latitude, longitude } = position.coords
-      currentLocation.value = {
-        lat: latitude,
-        lng: longitude,
-        address: '定位中...'
-      }
-      
-      reverseGeocode(latitude, longitude)
-      isGettingLocation.value = false
-      showToast('定位成功')
-    },
-    (error) => {
-      isGettingLocation.value = false
-      switch (error.code) {
-        case error.PERMISSION_DENIED:
-          showToast('请在系统设置中开启位置权限')
-          break
-        case error.POSITION_UNAVAILABLE:
-          showToast('无法获取当前位置')
-          break
-        case error.TIMEOUT:
-          showToast('定位超时')
-          break
-        default:
-          showToast('定位失败')
-      }
-    },
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
+const loadData = async () => {
+  try {
+    const history = await LocationAPI.getHistory()
+    historyRecords.value = (history.data || []).slice(0, 50).map(r => ({
+      icon: r.icon || '📍',
+      name: r.name || r.address || '未知位置',
+      time: `${formatTime(r.created_at)}${r.duration ? ' · 停留' + LocationAPI.formatDuration(r.duration) : ''}`,
+      current: false,
+      ownerId: r.owner_id,
+      isPartner: r.owner_id !== (authStore.user?.id)
+    }))
+    checkinRecords.value = historyRecords.value.filter(r => !r.isPartner).slice(0, 10)
+    if (historyRecords.value[0] && !historyRecords.value[0].isPartner) {
+      historyRecords.value[0].current = true
     }
-  )
+    const partner = await LocationAPI.getPartner()
+    if (partner) partnerLocation.value = partner
+  } catch (e) {
+    console.error('loadData error:', e)
+  }
 }
 
 const reverseGeocode = (lat, lng) => {
@@ -311,22 +289,56 @@ const reverseGeocode = (lat, lng) => {
     .then(data => {
       if (data.display_name) {
         const addressParts = data.display_name.split(',')
-        if (addressParts.length >= 3) {
-          currentLocation.value.address = addressParts.slice(-3).reverse().join(' ')
-        } else {
-          currentLocation.value.address = data.display_name
-        }
+        currentLocation.value.address = addressParts.length >= 3
+          ? addressParts.slice(-3).reverse().join(' ')
+          : data.display_name
       }
     })
     .catch(() => {
-      currentLocation.value.address = '北京市朝阳区望京花园'
+      currentLocation.value.address = '定位地址解析失败'
     })
 }
 
+const getCurrentLocation = async () => {
+  if (!navigator.geolocation) {
+    showToast('您的浏览器不支持GPS定位')
+    return
+  }
+  isGettingLocation.value = true
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords
+      currentLocation.value = { lat: latitude, lng: longitude, address: '定位中...' }
+      reverseGeocode(latitude, longitude)
+      try {
+        await LocationAPI.update({ latitude, longitude })
+        await loadData()
+        showToast('定位成功并已同步')
+      } catch (e) {
+        showToast(e?.message || '位置同步失败')
+      }
+      isGettingLocation.value = false
+    },
+    (error) => {
+      isGettingLocation.value = false
+      switch (error.code) {
+        case error.PERMISSION_DENIED: showToast('请在系统设置中开启位置权限'); break
+        case error.POSITION_UNAVAILABLE: showToast('无法获取当前位置'); break
+        case error.TIMEOUT: showToast('定位超时'); break
+        default: showToast('定位失败')
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  )
+}
+
 const openMapApp = (app) => {
-  const { lat, lng, address } = currentLocation.value
+  const target = partnerLocation.value || currentLocation.value
+  const lat = target?.latitude ?? target?.lat
+  const lng = target?.longitude ?? target?.lng
+  const address = target?.address || target?.name || '目标位置'
+  if (lat == null || lng == null) return showToast('暂无可用位置')
   let url = ''
-  
   switch (app.scheme) {
     case 'amap':
       url = `amapuri://route/plan/?dlat=${lat}&dlng=${lng}&dname=${encodeURIComponent(address)}&dev=0`
@@ -341,13 +353,11 @@ const openMapApp = (app) => {
       url = `maps://maps.google.com/maps?daddr=${lat},${lng}&dirflg=d`
       break
   }
-  
   window.location.href = url
   showMapSelector.value = false
-  
   setTimeout(() => {
     if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
-      window.location.href = `https://apps.apple.com/cn/app/%E9%AB%98%E5%BE%B7%E5%9C%B0%E5%9B%BE/id461703208`
+      window.location.href = 'https://apps.apple.com/cn/app/%E9%AB%98%E5%BE%B7%E5%9C%B0%E5%9B%BE/id461703208'
     } else {
       window.location.href = `https://a.app.qq.com/o/simple.jsp?pkgname=${app.package}`
     }
@@ -355,10 +365,12 @@ const openMapApp = (app) => {
 }
 
 const openNavi = () => {
+  if (!partnerLocation.value) return showToast('暂无对方位置')
   showMapSelector.value = true
 }
 
 onMounted(() => {
+  loadData()
   getCurrentLocation()
 })
 </script>
@@ -736,6 +748,30 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 500;
   box-shadow: 0 2px 8px rgba(255, 107, 157, 0.3);
+}
+
+.owner-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  margin-right: 6px;
+  color: #fff;
+}
+
+.owner-badge.me {
+  background: linear-gradient(135deg, #ff6b9d 0%, #ff8fab 100%);
+}
+
+.owner-badge.partner {
+  background: linear-gradient(135deg, #74b9ff 0%, #a29bfe 100%);
+}
+
+.empty-text {
+  text-align: center;
+  padding: 28px 0;
+  color: #999;
+  font-size: 14px;
 }
 
 .checkin-points {

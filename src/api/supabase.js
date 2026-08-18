@@ -238,7 +238,11 @@ export const supabaseAuth = {
 export const supabaseRest = {
   get(path, token) { return request(`/rest/v1/${path}`, {}, token) },
   post(path, body, token, headers = {}) {
-    return request(`/rest/v1/${path}`, { method: 'POST', body: JSON.stringify(body), headers: { Prefer: 'return=representation', ...headers } }, token)
+    return request(`/rest/v1/${path}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { Prefer: 'return=representation', ...headers }
+    }, token)
   },
   patch(path, body, token) {
     return request(`/rest/v1/${path}`, { method: 'PATCH', body: JSON.stringify(body), headers: { Prefer: 'return=representation' } }, token)

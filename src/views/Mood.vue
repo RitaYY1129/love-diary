@@ -88,6 +88,8 @@
       </div>
     </div>
 
+    <div v-if="toast" class="toast">{{ toast }}</div>
+
     <div class="tab-bar">
       <div 
         v-for="tab in tabs" 
@@ -121,7 +123,9 @@
         ></textarea>
         <div class="flex gap-3">
           <button @click="closeMoodModal" class="btn btn-secondary flex-1">取消</button>
-          <button @click="saveMood" class="btn btn-primary flex-1">保存</button>
+          <button :disabled="saving" @click="saveMood" class="btn btn-primary flex-1">
+            {{ saving ? '保存中...' : '保存' }}
+          </button>
         </div>
       </div>
     </div>
@@ -166,6 +170,13 @@ const showMoodModal = ref(false)
 const editingMood = ref(null)
 const selectedMood = ref(null)
 const moodNote = ref('')
+const saving = ref(false)
+const toast = ref('')
+
+const showToast = (message) => {
+  toast.value = message
+  setTimeout(() => { toast.value = '' }, 2500)
+}
 
 const stats = ref({
   total: 0,
@@ -245,27 +256,36 @@ const closeMoodModal = () => {
 
 const saveMood = async () => {
   if (!selectedMood.value) return
-  
-  const data = {
-    mood: selectedMood.value.value,
-    emoji: selectedMood.value.emoji,
-    note: moodNote.value
+  saving.value = true
+  try {
+    const data = {
+      mood: selectedMood.value.value,
+      emoji: selectedMood.value.emoji,
+      note: moodNote.value
+    }
+    if (editingMood.value) {
+      await moodStore.update(editingMood.value.id, data)
+    } else {
+      await moodStore.create(data)
+    }
+    closeMoodModal()
+    await loadData()
+    showToast(editingMood.value ? '心情已更新' : '心情已记录')
+  } catch (error) {
+    showToast(error?.message || '保存失败')
+  } finally {
+    saving.value = false
   }
-  
-  if (editingMood.value) {
-    await moodStore.update(editingMood.value.id, data)
-  } else {
-    await moodStore.create(data)
-  }
-  
-  closeMoodModal()
-  await loadData()
 }
 
 const deleteMood = async (id) => {
   if (confirm('确定要删除这条心情记录吗？')) {
-    await moodStore.delete(id)
-    await loadData()
+    try {
+      await moodStore.delete(id)
+      await loadData()
+    } catch (error) {
+      showToast(error?.message || '删除失败')
+    }
   }
 }
 
@@ -273,6 +293,7 @@ const loadData = async () => {
   await moodStore.list()
   moodHistory.value = moodStore.moods
   todayMood.value = moodStore.getToday()
+  stats.value = await moodStore.stats() || { total: 0, avgScore: 0, topMood: null, streak: 0 }
 }
 
 onMounted(() => {
@@ -297,4 +318,17 @@ onMounted(() => {
   background:linear-gradient(145deg,#fffafa,#fff5f4) !important;
 }
 .page-content > .card:last-child :deep(.border-b) { min-height:58px; }
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 90px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 22px;
+  background: rgba(50, 40, 45, .88);
+  color: #fff;
+  font-size: 13px;
+  z-index: 1000;
+  pointer-events: none;
+}
 </style>

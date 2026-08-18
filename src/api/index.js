@@ -136,22 +136,36 @@ export const AnniversaryAPI = {
 }
 
 export const PhotoAPI = restApi('photos')
+function mapMoodOut(item) {
+  return {
+    mood: item.mood,
+    emoji: item.emoji,
+    note: item.note,
+    date: item.date || new Date().toISOString().split('T')[0]
+  }
+}
+
+function mapMoodIn(row) {
+  if (!row) return row
+  return { ...row, date: row.date || row.created_at?.slice(0, 10) }
+}
+
 export const MoodAPI = {
   list: async () => {
     const data = await supabaseRest.get('moods?select=*&order=created_at.desc', token())
-    return { data: data || [] }
+    return { data: (data || []).map(mapMoodIn) }
   },
   get: async (id) => {
     const data = await supabaseRest.get(`moods?select=*&id=eq.${id}`, token())
-    return Array.isArray(data) ? data[0] : data
+    return mapMoodIn(Array.isArray(data) ? data[0] : data)
   },
   create: async (item) => {
-    const data = await supabaseRest.post('moods?select=*', withOwner(item), token())
-    return Array.isArray(data) ? data[0] : data
+    const data = await supabaseRest.post('moods?select=*', withOwner(mapMoodOut(item)), token())
+    return mapMoodIn(Array.isArray(data) ? data[0] : data)
   },
   update: async (id, item) => {
-    const data = await supabaseRest.patch(`moods?id=eq.${id}&select=*`, item, token())
-    return Array.isArray(data) ? data[0] : data
+    const data = await supabaseRest.patch(`moods?id=eq.${id}&select=*`, mapMoodOut(item), token())
+    return mapMoodIn(Array.isArray(data) ? data[0] : data)
   },
   delete: async (id) => {
     await supabaseRest.delete(`moods?id=eq.${id}`, token())
@@ -176,9 +190,10 @@ export const MoodAPI = {
     const topMood = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
     const topEntry = topMood ? arr.find(m => m.mood === topMood[0]) : null
     return {
-      count: arr.length,
-      average: scores.length ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length * 10) / 10 : 0,
-      topMood: topEntry ? { mood: topEntry.mood, emoji: topEntry.emoji } : null
+      total: arr.length,
+      avgScore: scores.length ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length * 10) / 10 : 0,
+      streak: 0,
+      topMood: topEntry ? { emoji: topEntry.emoji } : null
     }
   }
 }
@@ -212,6 +227,43 @@ export const CheckinAPI = {
     return { total: dates.length, streak, thisMonth: dates.filter(d => new Date(d).getMonth() === today.getMonth()).length }
   }
 }
+function formatDuration(minutes) {
+  if (!minutes || minutes <= 0) return ''
+  if (minutes < 60) return `${minutes}分钟`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h}小时${m}分钟` : `${h}小时`
+}
+
+function samePlace(a, b) {
+  if (!a || !b) return false
+  const R = 6371000
+  const dLat = (a.latitude - b.latitude) * Math.PI / 180
+  const dLon = (a.longitude - b.longitude) * Math.PI / 180
+  const lat1 = a.latitude * Math.PI / 180
+  const lat2 = b.latitude * Math.PI / 180
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
+  const dist = 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x))
+  return dist < 200
+}
+
+function mergeStayRecords(rows) {
+  const sorted = [...(rows || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+  const stays = []
+  let current = null
+  for (const r of sorted) {
+    if (current && samePlace(current, r)) {
+      current.duration += r.duration || Math.max(1, Math.round((new Date(r.created_at) - new Date(current.started_at || current.created_at)) / 60000))
+      current.updated_at = r.created_at
+    } else {
+      if (current) stays.push(current)
+      current = { ...r, duration: r.duration || 0, started_at: r.started_at || r.created_at }
+    }
+  }
+  if (current) stays.push(current)
+  return stays.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+}
+
 export const LocationAPI = {
   get: async () => {
     const uid = currentUserId()
@@ -219,7 +271,18 @@ export const LocationAPI = {
     return Array.isArray(data) ? data[0] : data
   },
   update: async (item) => {
-    const data = await supabaseRest.post('locations?select=*', withOwner(item), token())
+    const cid = await getMyCoupleId()
+    const latest = await LocationAPI.get()
+    let duration = item.duration || 0
+    let name = item.name
+    let icon = item.icon
+    if (latest && samePlace(latest, item)) {
+      duration = Math.max(1, Math.round((Date.now() - new Date(latest.started_at || latest.created_at).getTime()) / 60000))
+      name = name || latest.name
+      icon = icon || latest.icon
+    }
+    const payload = { ...withOwner(item), couple_id: cid, duration, name: name || item.address || '未知位置', icon: icon || '📍' }
+    const data = await supabaseRest.post('locations?select=*', payload, token())
     return Array.isArray(data) ? data[0] : data
   },
   getPartner: async () => {
@@ -230,10 +293,13 @@ export const LocationAPI = {
     return Array.isArray(data) ? data[0] : data
   },
   getHistory: async () => {
+    const cid = await getMyCoupleId()
     const uid = currentUserId()
-    const data = await supabaseRest.get(`locations?select=*&owner_id=eq.${uid}&order=created_at.desc`, token())
-    return { data: data || [] }
-  }
+    if (!cid || !uid) return { data: [] }
+    const data = await supabaseRest.get(`locations?select=*&couple_id=eq.${cid}&order=created_at.desc&limit=200`, token())
+    return { data: mergeStayRecords(data || []) }
+  },
+  formatDuration
 }
 export const FinanceAPI = {
   list: async (page = 1, limit = 20) => {
@@ -283,11 +349,18 @@ export const SharingAPI = {
     const data = await supabaseRest.get(`couple_shared_states?select=state&couple_id=eq.${cid}&module=eq.${module}`, token())
     return { payload: Array.isArray(data) && data[0] ? data[0].state : null }
   },
+  getState: async (module) => {
+    const cid = await getMyCoupleId()
+    if (!cid) return { payload: null }
+    const data = await supabaseRest.get(`couple_shared_states?select=state&couple_id=eq.${cid}&module=eq.${module}`, token())
+    return { payload: Array.isArray(data) && data[0] ? data[0].state : null }
+  },
   putState: async (module, payload) => {
     const cid = await getMyCoupleId()
     if (!cid) throw new Error('尚未绑定情侣')
-    const data = await supabaseRest.post(`couple_shared_states?select=*&on_conflict=couple_id,module`, { couple_id: cid, module, state: payload }, token())
-    return { payload: Array.isArray(data) ? data[0].state : payload }
+    const upsertBody = { couple_id: cid, module, state: payload }
+    const data = await supabaseRest.post(`couple_shared_states?select=*`, upsertBody, token(), { Prefer: 'resolution=merge-duplicates' })
+    return { payload: Array.isArray(data) && data[0] ? data[0].state : payload }
   }
 }
 
@@ -304,7 +377,8 @@ export const ChatAPI = {
   send: async (type, content, metadata = {}) => {
     const cid = await getMyCoupleId()
     if (!cid) throw new Error('尚未绑定情侣，无法聊天')
-    const data = await supabaseRest.post('chat_messages?select=*', { couple_id: cid, sender_id: currentUserId(), type, content, metadata }, token())
+    const payload = { couple_id: cid, sender_id: currentUserId(), type, content, metadata: metadata || null }
+    const data = await supabaseRest.post('chat_messages?select=*', payload, token())
     if (!data) throw new Error('消息发送失败：服务器未返回数据')
     return Array.isArray(data) ? data[0] : data
   },

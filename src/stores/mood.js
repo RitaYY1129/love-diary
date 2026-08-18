@@ -3,16 +3,23 @@ import { ref } from 'vue'
 import { MoodAPI } from '@/api'
 import { hydrateSharedState, pushSharedState } from '@/api/sharedState'
 
+const todayStr = () => new Date().toISOString().split('T')[0]
+
 export const useMoodStore = defineStore('mood', () => {
   const moods = ref([])
+
+  const normalizeMood = (m) => {
+    if (!m) return m
+    return { ...m, date: m.date || m.created_at?.slice(0, 10) }
+  }
 
   const list = async () => {
     try {
       const response = await MoodAPI.list()
-      moods.value = response.data
+      moods.value = (response.data || []).map(normalizeMood)
       const shared = await hydrateSharedState('mood', moods.value)
       if (shared.enabled && Array.isArray(shared.payload)) {
-        moods.value = shared.payload
+        moods.value = shared.payload.map(normalizeMood)
         localStorage.setItem('loveDiary_moods', JSON.stringify(moods.value))
       }
       return moods.value
@@ -25,33 +32,37 @@ export const useMoodStore = defineStore('mood', () => {
   const create = async (data) => {
     try {
       const response = await MoodAPI.create(data)
-      const today = new Date().toISOString().split('T')[0]
-      const existingIndex = moods.value.findIndex(m => m.date === today)
+      if (!response) throw new Error('创建心情失败')
+      const item = normalizeMood(response)
+      const today = todayStr()
+      const existingIndex = moods.value.findIndex(m => (m.date || m.created_at?.slice(0, 10)) === today)
       if (existingIndex !== -1) {
-        moods.value[existingIndex] = response
+        moods.value[existingIndex] = item
       } else {
-        moods.value.push(response)
+        moods.value.unshift(item)
       }
-      pushSharedState('mood', moods.value)
-      return response
+      await pushSharedState('mood', moods.value)
+      return item
     } catch (error) {
       console.error('Failed to create mood:', error)
-      return null
+      throw error
     }
   }
 
   const update = async (id, data) => {
     try {
       const response = await MoodAPI.update(id, data)
+      if (!response) throw new Error('更新心情失败')
+      const item = normalizeMood(response)
       const index = moods.value.findIndex(m => m.id === id)
       if (index !== -1) {
-        moods.value[index] = response
+        moods.value[index] = item
       }
-      pushSharedState('mood', moods.value)
-      return response
+      await pushSharedState('mood', moods.value)
+      return item
     } catch (error) {
       console.error('Failed to update mood:', error)
-      return null
+      throw error
     }
   }
 
