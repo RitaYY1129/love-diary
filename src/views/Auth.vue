@@ -83,7 +83,7 @@
           </button>
         </form>
 
-        <label class="mt-4 flex items-start justify-center gap-2 text-xs text-gray-500">
+        <label v-if="mode === 'register'" class="mt-4 flex items-start justify-center gap-2 text-xs text-gray-500">
           <input v-model="agreedToTerms" type="checkbox" class="mt-0.5" />
           <span>我已阅读并同意《用户协议》和《隐私政策》</span>
         </label>
@@ -182,7 +182,7 @@ const sendEmailCode = async () => {
 }
 
 const handleSubmit = async () => {
-  if (!agreedToTerms.value) {
+  if (mode.value === 'register' && !agreedToTerms.value) {
     showToast('请先阅读并同意用户协议和隐私政策')
     return
   }

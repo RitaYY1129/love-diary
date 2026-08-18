@@ -16,18 +16,29 @@ const configured = () => {
 
 const request = async (path, options = {}, accessToken = null) => {
   configured()
-  const response = await fetch(`${url}${path}`, {
-    ...options,
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${accessToken || anonKey}`,
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers || {})
-    }
-  })
-  const data = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(data?.msg || data?.message || data?.error_description || '请求失败')
-  return data
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15000) // 15 秒超时，避免一直转圈
+  try {
+    const response = await fetch(`${url}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken || anonKey}`,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers || {})
+      }
+    })
+    clearTimeout(timer)
+    const text = await response.text()
+    const data = text ? JSON.parse(text) : null
+    if (!response.ok) throw new Error(data?.msg || data?.message || data?.error_description || text || '请求失败')
+    return data
+  } catch (err) {
+    clearTimeout(timer)
+    if (err.name === 'AbortError') throw new Error('请求超时，请检查网络')
+    throw err
+  }
 }
 
 // ---- 身份标识归一化 ----
@@ -82,9 +93,10 @@ export const supabaseAuth = {
     if (Array.isArray(existing) && existing.length) {
       return { ok: false, message: '该手机号/用户名已被注册' }
     }
+    const id = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const data = await request('/rest/v1/profiles?select=*', {
       method: 'POST',
-      body: JSON.stringify([{ id: crypto.randomUUID(), username: nick, identifier: idVal, nickname: nick, invite_code: code, password_hash }]),
+      body: JSON.stringify([{ id, username: nick, identifier: idVal, nickname: nick, invite_code: code, password_hash }]),
       headers: { Prefer: 'return=representation' }
     }, anonKey)
     const p = Array.isArray(data) ? data[0] : data
@@ -106,7 +118,8 @@ export const supabaseAuth = {
       const user = await withPartner(p)
       return { ok: true, token: makeToken(user.id), user }
     } catch (e) {
-      return { ok: false, message: e.message || '登录失败' }
+      console.error('signIn error:', e)
+      return { ok: false, message: e.message || '登录失败，请检查网络或 Supabase 配置' }
     }
   },
 
