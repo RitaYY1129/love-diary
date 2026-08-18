@@ -5,8 +5,8 @@
 // ============================================================================
 import bcrypt from 'bcryptjs'
 
-const url = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '')
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+const url = String(import.meta.env.VITE_SUPABASE_URL || 'https://grwdgdyduvewuxkibajh.supabase.co').replace(/\/$/, '')
+const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_p0BdXWxDe3fczsmHnd3NMQ_oEzTqE82'
 
 const configured = () => {
   if (!url || !anonKey) {
@@ -84,9 +84,11 @@ export const supabaseAuth = {
     }
     const data = await request('/rest/v1/profiles?select=*', {
       method: 'POST',
-      body: JSON.stringify([{ id: crypto.randomUUID(), username: nick, identifier: idVal, nickname: nick, invite_code: code, password_hash }])
+      body: JSON.stringify([{ id: crypto.randomUUID(), username: nick, identifier: idVal, nickname: nick, invite_code: code, password_hash }]),
+      headers: { Prefer: 'return=representation' }
     }, anonKey)
     const p = Array.isArray(data) ? data[0] : data
+    if (!p) return { ok: false, message: '注册后未返回用户信息，请重试' }
     const user = mapProfile(p)
     return { ok: true, token: makeToken(user.id), user, message: '注册成功，请登录' }
   },
