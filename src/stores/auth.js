@@ -62,6 +62,45 @@ export const useAuthStore = defineStore('auth', {
       return { ok: false, message: result.message }
     },
 
+    // ---- 邮箱验证码 ----
+    async sendEmailCode(email) {
+      // 本地模拟：生成 6 位码存到 localStorage，控制台也会打印方便测试
+      const code = Math.floor(100000 + Math.random() * 900000).toString()
+      localStorage.setItem(`email_code_${email}`, code)
+      // eslint-disable-next-line no-console
+      console.log(`[测试模式] 邮箱 ${email} 的验证码是：${code}`)
+      return { ok: true, message: `验证码已发送，测试码：${code}` }
+    },
+
+    // ---- 手机号注册 ----
+    async registerByPhone(username, identifier, password) {
+      const result = await AuthAPI.register({ username, identifier, password })
+      if (result.ok) {
+        if (result.token && result.user) {
+          this._persist(result.token, result.user)
+        }
+        return { ok: true, needLogin: !result.token, message: result.message }
+      }
+      return { ok: false, message: result.message }
+    },
+
+    // ---- 邮箱验证码注册 ----
+    async registerByEmailCode(username, email, code, password) {
+      const savedCode = localStorage.getItem(`email_code_${email}`)
+      if (!savedCode || savedCode !== code) {
+        return { ok: false, message: '验证码错误或已过期' }
+      }
+      localStorage.removeItem(`email_code_${email}`)
+      const result = await AuthAPI.register({ username, identifier: email, password })
+      if (result.ok) {
+        if (result.token && result.user) {
+          this._persist(result.token, result.user)
+        }
+        return { ok: true, needLogin: !result.token, message: result.message }
+      }
+      return { ok: false, message: result.message }
+    },
+
     // ---- 微信登录 ----
     async loginByWechat(code) {
       const result = await AuthAPI.loginByWechat(code)
