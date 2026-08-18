@@ -341,8 +341,13 @@ export const SharingAPI = {
     return s.payload || {}
   },
   updatePreferences: async (preferences) => {
+    const uid = currentUserId()
+    if (!uid) throw new Error('未登录')
     const cur = (await SharingAPI.getState('preferences')).payload || {}
-    return SharingAPI.putState('preferences', { ...cur, ...preferences })
+    return SharingAPI.putState('preferences', {
+      ...cur,
+      [uid]: { ...(cur[uid] || {}), ...preferences }
+    })
   },
   getState: async (module) => {
     const cid = await getMyCoupleId()
@@ -369,7 +374,9 @@ export const SharingAPI = {
 // ---------------------------------------------------------------------------
 export const ChatAPI = {
   list: async (afterId = null) => {
-    let path = 'chat_messages?select=*&order=created_at.asc'
+    const cid = await getMyCoupleId()
+    if (!cid) return { data: [] }
+    let path = `chat_messages?select=*&couple_id=eq.${cid}&order=created_at.asc`
     if (afterId) path += `&id=gt.${afterId}`
     const data = await supabaseRest.get(path, token())
     return { data: data || [] }

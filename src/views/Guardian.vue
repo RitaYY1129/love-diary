@@ -157,10 +157,14 @@ const showToast = message => {
   toastTimer = setTimeout(() => { toast.value = '' }, 2200)
 }
 const applyPreferences = response => {
-  const prefs = response?.preferences || response || {}
-  const partnerPrefs = response?.partnerPreferences || {}
-  const myVal = Boolean(prefs.device_activity)
-  const partnerVal = Boolean(partnerPrefs.device_activity)
+  const uid = String(authStore.user?.id || '')
+  const partnerId = String(partner.value?.id || '')
+  const payload = response?.preferences || response || {}
+  // 新结构按用户 ID 分区，也兼容旧平铺结构
+  const myPrefs = (uid && payload[uid] && typeof payload[uid] === 'object') ? payload[uid] : payload
+  const partnerPrefs = (partnerId && payload[partnerId] && typeof payload[partnerId] === 'object') ? payload[partnerId] : {}
+  const myVal = Boolean(myPrefs.device_activity || myPrefs.deviceActivity)
+  const partnerVal = Boolean(partnerPrefs.device_activity || partnerPrefs.deviceActivity)
   mySharing.value = myVal
   partnerSharing.value = partnerVal
   effectiveSharing.value = myVal && partnerVal
@@ -200,12 +204,15 @@ const refreshAll = async () => {
 }
 const toggleMySharing = async () => {
   permissionSaving.value = true
+  const previous = mySharing.value
+  const enabled = !previous
   try {
-    const enabled = !mySharing.value
     await SharingAPI.updatePreferences({ device_activity: enabled, deviceActivity: enabled })
+    mySharing.value = enabled
     await refreshAll()
-    showToast(mySharing.value ? '已开启，等待对方确认' : '已关闭守护动态共享')
+    showToast(enabled ? '已开启，等待对方确认' : '已关闭守护动态共享')
   } catch (error) {
+    mySharing.value = previous
     showToast(error?.message || '设置保存失败')
   } finally {
     permissionSaving.value = false

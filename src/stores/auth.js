@@ -173,6 +173,11 @@ export const useAuthStore = defineStore('auth', {
       this.isAuthenticated = false
       localStorage.removeItem('loveDiary_token')
       localStorage.removeItem('loveDiary_user')
+    },
+
+    // 兼容旧代码：refreshProfile 是 loadUser 的别名
+    async refreshProfile() {
+      return this.loadUser()
     }
   }
 })
