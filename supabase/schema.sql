@@ -221,6 +221,27 @@ create table if not exists calm_modes (
 );
 
 -- ----------------------------------------------------------------------------
+-- 清理已有 RLS policy（兼容先创建过表的情况）：先删除，再关闭 RLS
+-- ----------------------------------------------------------------------------
+do $$
+declare
+  pol record;
+begin
+  for pol in
+    select schemaname, tablename, policyname
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in (
+        'profiles', 'couple_shared_states', 'diaries', 'wishes', 'plans',
+        'anniversaries', 'photos', 'moods', 'checkins', 'locations',
+        'finances', 'chat_messages', 'call_records', 'calm_modes'
+      )
+  loop
+    execute format('drop policy if exists %I on %I.%I', pol.policyname, pol.schemaname, pol.tablename);
+  end loop;
+end $$;
+
+-- ----------------------------------------------------------------------------
 -- 统一关闭 RLS（本项目使用前端本地账号 + anon 角色读写）
 -- ----------------------------------------------------------------------------
 alter table profiles              disable row level security;
