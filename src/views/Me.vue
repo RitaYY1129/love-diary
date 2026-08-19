@@ -126,9 +126,6 @@ const tabs = [
 
 const menuItems = [
   { icon: '📝', label: '恋爱日记', path: '/diary' },
-  { icon: '📊', label: '数据统计', path: '/dashboard' },
-  { icon: '😊', label: '心情记录', path: '/mood' },
-  { icon: '✅', label: '打卡记录', path: '/checkin' },
   { icon: '⭐', label: '愿望清单', path: '/bucketlist' },
   { icon: '📋', label: '计划安排', path: '/plan' },
   { icon: '⏰', label: '提醒设置', path: '/alarm' },

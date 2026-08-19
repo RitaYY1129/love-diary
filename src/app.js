@@ -2,8 +2,6 @@ import { APP_CONFIG } from './config/app';
 import { DataStore } from './data/store';
 import HomeModule from './modules/home';
 import DiaryModule from './modules/diary';
-import MoodModule from './modules/mood';
-import CheckinModule from './modules/checkin';
 import SettingsModule from './modules/settings';
 import PhotoModule from './modules/photo';
 import WishesModule from './modules/wishes';
@@ -16,7 +14,6 @@ import VentModule from './modules/vent';
 import QuizModule from './modules/quiz';
 import BucketlistModule from './modules/bucketlist';
 import GamesModule from './modules/games';
-import DashboardModule from './modules/dashboard';
 
 class App {
   constructor() {
@@ -28,8 +25,6 @@ class App {
   registerModules() {
     this.modules['home'] = new HomeModule();
     this.modules['diary'] = new DiaryModule();
-    this.modules['mood'] = new MoodModule();
-    this.modules['checkin'] = new CheckinModule();
     this.modules['settings'] = new SettingsModule();
     this.modules['photo'] = new PhotoModule();
     this.modules['wishes'] = new WishesModule();
@@ -42,7 +37,6 @@ class App {
     this.modules['quiz'] = new QuizModule();
     this.modules['bucketlist'] = new BucketlistModule();
     this.modules['games'] = new GamesModule();
-    this.modules['dashboard'] = new DashboardModule();
   }
 
   init() {
@@ -116,7 +110,7 @@ class App {
     bar.innerHTML = '';
 
     const moduleNames = Object.keys(this.config.modules)
-      .filter(n => this.config.modules[n].enabled && n !== 'settings' && n !== 'dashboard')
+      .filter(n => this.config.modules[n].enabled && n !== 'settings')
       .sort((a, b) => this.config.modules[a].order - this.config.modules[b].order);
 
     moduleNames.forEach(name => {

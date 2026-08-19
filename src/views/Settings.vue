@@ -205,8 +205,6 @@ const privacySettings = ref({
   fund: true,
   photos: true,
   diary: false,
-  mood: false,
-  checkin: true,
   location: false,
   device_activity: false
 })
@@ -219,16 +217,13 @@ const sharingOptions = [
   { key: 'plans', label: '未来计划', description: '同步两个人的安排' },
   { key: 'fund', label: '共同记账', description: '共享账户和交易记录' },
   { key: 'photos', label: '情侣相册', description: '共享相册集和照片记录' },
-  { key: 'checkin', label: '打卡记录', description: '让对方看到坚持的天数' },
   { key: 'diary', label: '恋爱日记', description: '默认私密，可主动共享' },
-  { key: 'mood', label: '心情记录', description: '默认私密，可主动共享' },
   { key: 'location', label: '实时位置', description: '默认关闭，双方同意后共享' },
   { key: 'device_activity', label: '守护动态', description: '默认关闭，双方开启且系统授权后共享手机使用概况' }
 ]
 
 const notificationSettings = ref({
   anniversary: true,
-  checkin: true,
   plan: true
 })
 

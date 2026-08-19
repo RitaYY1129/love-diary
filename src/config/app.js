@@ -22,12 +22,9 @@ export const APP_CONFIG = {
     me: { enabled: true, order: 4, icon: '👤', label: '我的' },
     alarm: { enabled: false, order: 5, icon: '⏰', label: '闹钟' },
     vent: { enabled: false, order: 6, icon: '🗣️', label: '吐槽' },
-    checkin: { enabled: false, order: 7, icon: '✅', label: '打卡' },
     quiz: { enabled: false, order: 8, icon: '🧠', label: '答题' },
     bucketlist: { enabled: false, order: 9, icon: '📋', label: '愿望清单' },
-    mood: { enabled: false, order: 10, icon: '😊', label: '心情' },
-    games: { enabled: false, order: 11, icon: '🎮', label: '游戏' },
-    dashboard: { enabled: true, order: 12, icon: '📊', label: '数据' }
+    games: { enabled: false, order: 11, icon: '🎮', label: '游戏' }
   },
 
   api: {

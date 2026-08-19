@@ -61,17 +61,6 @@
         </div>
       </section>
 
-      <section class="checkin-card">
-        <div class="checkin-icon">♥</div>
-        <div class="checkin-copy">
-          <strong>{{ checkedToday ? '今天也认真相爱了' : '记录今天的相爱' }}</strong>
-          <span>已经连续陪伴 {{ streak }} 天</span>
-        </div>
-        <button :class="{ checked: checkedToday }" :disabled="checkingIn" @click="handleCheckin">
-          {{ checkedToday ? '已打卡' : '甜蜜打卡' }}
-        </button>
-      </section>
-
       <div class="status-grid">
         <button class="status-card anniversary-status" @click="go('/anniversary')">
           <span class="status-kicker">下一纪念日</span>
@@ -173,14 +162,6 @@
             <em>{{ pendingWish ? '待实现' : '去许愿' }}</em>
           </button>
 
-          <button @click="go('/mood')">
-            <span class="list-icon mood-icon">{{ todayMood?.emoji || '☺' }}</span>
-            <span class="list-copy">
-              <small>今日心情</small>
-              <strong>{{ todayMoodLabel }}</strong>
-            </span>
-            <em>{{ todayMood ? '已记录' : '去记录' }}</em>
-          </button>
         </div>
       </section>
 
@@ -267,9 +248,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useCheckinStore } from '../stores/checkin'
 import { useDiaryStore } from '../stores/diary'
-import { useMoodStore } from '../stores/mood'
 import { AnniversaryAPI, PlanAPI } from '@/api'
 import memoryCafe from '../../assets/img/memory-cafe-web.jpg'
 import memoryMorning from '../../assets/img/memory-morning-web.jpg'
@@ -277,9 +256,7 @@ import memoryMorning from '../../assets/img/memory-morning-web.jpg'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const checkinStore = useCheckinStore()
 const diaryStore = useDiaryStore()
-const moodStore = useMoodStore()
 
 const anniversaries = ref([])
 const pinnedAnniversary = ref(null)
@@ -290,7 +267,6 @@ const photoRecords = ref([])
 const photoAlbums = ref([])
 const activeHomePhotoIndex = ref(0)
 let homeCarouselTimer = null
-const checkingIn = ref(false)
 const toast = ref('')
 const installPrompt = ref(null)
 const showHeroCustomizer = ref(false)
@@ -373,7 +349,7 @@ const startHomeCarousel = () => {
   }, 3600)
 }
 const loveValue = computed(() => {
-  return 5200 + loveDays.value * 3 + diaryCount.value * 18 + checkinStore.history.length * 12
+  return 5200 + loveDays.value * 3 + diaryCount.value * 18
 })
 
 const pinnedCountdown = computed(() => {
@@ -420,13 +396,6 @@ const todayText = computed(() => {
   return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' }).format(new Date())
 })
 
-const checkedToday = computed(() => checkinStore.hasCheckedInToday)
-const streak = computed(() => checkinStore.streak || 0)
-const todayMood = computed(() => moodStore.getToday?.() || null)
-const todayMoodLabel = computed(() => {
-  if (!todayMood.value) return '你今天心情怎么样？'
-  return todayMood.value.note || `今天的心情是 ${todayMood.value.emoji || '☺'} ${todayMood.value.mood || ''}`
-})
 const recentDiary = computed(() => diaryStore.entries?.[0] || null)
 const fundBalance = computed(() => Number(fundData.value.totalAmount) || 0)
 const fundCount = computed(() => fundData.value.transactions?.length || 0)
@@ -623,20 +592,6 @@ async function installApp() {
   )
 }
 
-async function handleCheckin() {
-  if (checkedToday.value || checkingIn.value) return
-  checkingIn.value = true
-  try {
-    const result = await checkinStore.checkin()
-    toast.value = result?.success === false ? (result.message || '今天已经打过卡啦') : '打卡成功，今天也要好好相爱'
-  } catch {
-    toast.value = '暂时没打上卡，再试一次吧'
-  } finally {
-    checkingIn.value = false
-    window.setTimeout(() => { toast.value = '' }, 2200)
-  }
-}
-
 function lineIcon(name) {
   const icons = {
     home: '<svg viewBox="0 0 24 24"><path d="M3.8 10.7 12 4l8.2 6.7v8a1.5 1.5 0 0 1-1.5 1.5H5.3a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M9.2 20.2v-6.3h5.6v6.3"/></svg>',
@@ -688,10 +643,7 @@ onMounted(async () => {
   if (!wishes.value.length) wishes.value = readLocal('loveDiary_wishes')
 
   const tasks = [
-    moodStore.list?.(),
     diaryStore.list?.(),
-    checkinStore.loadHistory?.(),
-    checkinStore.loadStreak?.(),
     AnniversaryAPI.list(),
     PlanAPI.list(),
     AnniversaryAPI.getPinned()

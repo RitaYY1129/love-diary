@@ -20,18 +20,6 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
-    path: '/mood',
-    name: 'Mood',
-    component: () => import('@/views/Mood.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/checkin',
-    name: 'Checkin',
-    component: () => import('@/views/Checkin.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
     path: '/photo',
     name: 'Photo',
     component: () => import('@/views/Photo.vue'),
@@ -93,12 +81,6 @@ const routes = [
     path: '/bucketlist',
     name: 'BucketList',
     component: () => import('@/views/BucketList.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('@/views/Dashboard.vue'),
     meta: { requiresAuth: true }
   },
   {
