@@ -401,7 +401,7 @@ const pinnedCountdown = computed(() => {
   const seconds = Math.floor(diff / 1000)
   const pad = n => String(n).padStart(2, '0')
   return {
-    name: pinned.name,
+    name: pinned.name || pinned.title || '置顶纪念日',
     days: String(days),
     hours: pad(hours),
     minutes: pad(minutes),
@@ -432,6 +432,16 @@ const fundBalance = computed(() => Number(fundData.value.totalAmount) || 0)
 const fundCount = computed(() => fundData.value.transactions?.length || 0)
 
 const nextAnniversary = computed(() => {
+  // 优先使用置顶纪念日，保证主页统计与倒计时一致
+  if (pinnedAnniversary.value?.date) {
+    const name = pinnedAnniversary.value.name || pinnedAnniversary.value.title || '纪念日'
+    return {
+      ...pinnedAnniversary.value,
+      name,
+      title: name,
+      ...getNextOccurrence(pinnedAnniversary.value.date)
+    }
+  }
   const items = anniversaries.value
     .map(item => ({ ...item, title: item.title || item.name, ...getNextOccurrence(item.date) }))
     .filter(item => Number.isFinite(item.days))

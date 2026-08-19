@@ -284,20 +284,42 @@ const loadData = async () => {
 }
 
 const reverseGeocode = (lat, lng) => {
-  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`)
+  // 优先使用苹果自带的地理编码（iOS/ macOS 原生定位，无需网络密钥）
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.reverseGeocode) {
+    window.webkit.messageHandlers.reverseGeocode.postMessage({ lat, lng })
+    return
+  }
+  // Web 降级：使用高德/OpenStreetMap 逆地理解析
+  fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=zh-CN`)
     .then(response => response.json())
     .then(data => {
-      if (data.display_name) {
-        const addressParts = data.display_name.split(',')
-        currentLocation.value.address = addressParts.length >= 3
-          ? addressParts.slice(-3).reverse().join(' ')
-          : data.display_name
+      if (data && data.display_name) {
+        const p = data.address || {}
+        const parts = [p.city || p.town || p.county || p.state, p.road || p.suburb || p.neighbourhood, p.name]
+          .filter(Boolean)
+        currentLocation.value.address = parts.length ? parts.join(' · ') : data.display_name
+      } else {
+        currentLocation.value.address = '地址解析失败'
       }
     })
     .catch(() => {
-      currentLocation.value.address = '定位地址解析失败'
+      currentLocation.value.address = '地址解析失败'
     })
 }
+
+// iOS 原生回调：由 Capacitor 插件注入，将逆地理结果写回当前位置
+window.onReverseGeocodeResult = (address) => {
+  if (currentLocation.value) {
+    currentLocation.value.address = address || '未知地址'
+  }
+}
+
+// 进入页面即自动定位并显示当前地址名称，不再需要手动登录或点击
+onMounted(async () => {
+  await authStore.loadUser()
+  loadData()
+  getCurrentLocation()
+})
 
 const getCurrentLocation = async () => {
   if (!navigator.geolocation) {
@@ -311,7 +333,7 @@ const getCurrentLocation = async () => {
       currentLocation.value = { lat: latitude, lng: longitude, address: '定位中...' }
       reverseGeocode(latitude, longitude)
       try {
-        await LocationAPI.update({ latitude, longitude })
+        await LocationAPI.update({ latitude, longitude, address: currentLocation.value.address })
         await loadData()
         showToast('定位成功并已同步')
       } catch (e) {
@@ -369,7 +391,8 @@ const openNavi = () => {
   showMapSelector.value = true
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await authStore.loadUser()
   loadData()
   getCurrentLocation()
 })

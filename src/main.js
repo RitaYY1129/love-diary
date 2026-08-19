@@ -4,12 +4,17 @@ import router from './router'
 import App from './App.vue'
 import './style.css'
 import { initTheme } from './theme'
+import { useAuthStore } from './stores/auth'
 
 initTheme()
 const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
+
+// 启动时从本地恢复登录态，避免每次进入都要求重新登录
+const authStore = useAuthStore()
+authStore.init()
 
 app.mount('#app')
 

@@ -119,8 +119,9 @@ export const AnniversaryAPI = {
     return { success: true }
   },
   getPinned: async () => {
+    const cid = await getMyCoupleId()
     const uid = currentUserId()
-    const data = await supabaseRest.get(`anniversaries?select=*&owner_id=eq.${uid}&pin_to_home=eq.true&limit=1`, token())
+    const data = await supabaseRest.get(`anniversaries?select=*&couple_id=eq.${cid}&pin_to_home=eq.true&order=updated_at.desc&limit=1`, token())
     return mapAnniversaryIn(Array.isArray(data) && data[0] ? data[0] : null)
   },
   setPinned: async (id) => {
